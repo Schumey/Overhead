@@ -12,6 +12,12 @@
     <string name="err_location_app">Kein Standort verfügbar. Erlaube den Standortzugriff oder speichere einen festen Ort.</string>
     <string name="err_network">Keine Verbindung zu den Flugdaten</string>
     <string name="eta">Ankunft ca. %1$s (%2$s)</string>
+    <string name="eta_token">Ank. ca. %s</string>
+    <string name="poster_title">DER HIMMEL ÜBER %s</string>
+    <string name="poster_title_unknown">DER HIMMEL ÜBER DIR</string>
+    <string name="poster_live">LIVE · %s</string>
+    <string name="poster_stale">STAND %s</string>
+    <string name="poster_loading">LÄDT …</string>
     <string name="dur_now">gleich</string>
     <string name="dur_min">in %d min</string>
     <string name="dur_hm">in %1$d h %2$d min</string>
@@ -43,5 +49,5 @@
     <string name="fixed_at">Fester Ort: %1$.4f, %2$.4f</string>
     <string name="radius">Umkreis</string>
     <string name="interval">Widget aktualisieren alle (nur bei eingeschaltetem Display)</string>
-    <string name="sources">Positionen: adsb.lol. Routen: adsbdb.com. Dein genauer Standort bleibt auf dem Gerät, abgefragt wird ein auf etwa 1 km gerundeter Punkt. Die Ankunftszeit ist eine Schätzung aus Restdistanz und Geschwindigkeit, kein Fahrplan. Tippe auf ein Flugzeug, um es auf der Karte zu sehen.</string>
+    <string name="sources">Positionen: adsb.lol. Routen: adsbdb.com. Wetter: open-meteo.com. Ortsname: Android-Geocoder. Dein genauer Standort bleibt auf dem Gerät, abgefragt wird immer ein auf etwa 1 km gerundeter Punkt. Die Flugzeuge sind Illustrationen in typischen Airline-Farben, keine Logos. Die Ankunftszeit ist eine Schätzung aus Restdistanz und Geschwindigkeit, kein Fahrplan. Tippe auf ein Flugzeug, um es auf der Karte zu sehen.</string>
 </resources>

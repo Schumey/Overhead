@@ -12,6 +12,12 @@
     <string name="err_location_app">No location available. Allow location access or save a fixed place.</string>
     <string name="err_network">No connection to the flight data</string>
     <string name="eta">Arrives approx. %1$s (%2$s)</string>
+    <string name="eta_token">ETA %s</string>
+    <string name="poster_title">THE SKY OVER %s</string>
+    <string name="poster_title_unknown">THE SKY ABOVE YOU</string>
+    <string name="poster_live">LIVE · %s</string>
+    <string name="poster_stale">UPDATED %s</string>
+    <string name="poster_loading">LOADING …</string>
     <string name="dur_now">any moment</string>
     <string name="dur_min">in %d min</string>
     <string name="dur_hm">in %1$d h %2$d min</string>
@@ -43,5 +49,5 @@
     <string name="fixed_at">Fixed place: %1$.4f, %2$.4f</string>
     <string name="radius">Radius</string>
     <string name="interval">Refresh the widget every (only while the screen is on)</string>
-    <string name="sources">Positions: adsb.lol. Routes: adsbdb.com. Your exact location stays on the device; a point rounded to about 1 km is looked up. The arrival time is an estimate from remaining distance and speed, not a schedule. Tap an aircraft to see it on a map.</string>
+    <string name="sources">Positions: adsb.lol. Routes: adsbdb.com. Weather: open-meteo.com. Place name: Android geocoder. Your exact location stays on the device; only a point rounded to about 1 km is looked up. The aircraft are illustrations in typical airline colours, not logos. The arrival time is an estimate from remaining distance and speed, not a schedule. Tap an aircraft to see it on a map.</string>
 </resources>

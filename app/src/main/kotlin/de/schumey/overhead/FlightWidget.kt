@@ -7,16 +7,21 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.PowerManager
 import android.os.SystemClock
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.concurrent.thread
 
 /**
- * Home-screen widget with the aircraft closest to the observer.
+ * Home-screen widget: the poster (see [Poster]) with the aircraft closest to the observer.
  *
  * Refresh: a self-rescheduling non-wakeup alarm (interval from the settings). It never wakes the phone, and it
  * skips the network while the screen is off; when the screen comes on, an overdue alarm fires right away.
@@ -42,6 +47,7 @@ class FlightWidget : AppWidgetProvider() {
                     }
                 }
             }
+            ACTION_DUMP -> dump(ctx, intent)
             else -> super.onReceive(ctx, intent)
         }
     }
@@ -54,11 +60,35 @@ class FlightWidget : AppWidgetProvider() {
         renderAll(ctx)
     }
 
+    /**
+     * Development helper (debuggable builds only): writes the poster for the stored snapshot to files/<name>.png, so the
+     * design can be checked without a visible screen. Extras: w, h (dp), t (epoch millis, to try other times of day), name.
+     */
+    private fun dump(ctx: Context, intent: Intent) {
+        if (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+        val d = ctx.resources.displayMetrics.density
+        val w = (intent.getIntExtra("w", 320) * d).toInt()
+        val h = (intent.getIntExtra("h", 200) * d).toInt()
+        val t = intent.getLongExtra("t", System.currentTimeMillis())
+        val name = intent.getStringExtra("name") ?: "poster"
+        val snap = Snapshot.fromJson(Prefs(ctx).snapshotJson)
+        fun save(bmp: Bitmap, file: String) =
+            FileOutputStream(File(ctx.filesDir, file)).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        save(Poster.render(ctx, snap, w, h, t).bitmap, "$name.png")
+
+        // Also assemble the real RemoteViews (poster + tap zones) the way the launcher does, to prove it inflates and applies.
+        val view = build(ctx, snap, false, w, h).apply(ctx, android.widget.FrameLayout(ctx))
+        view.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
+        view.layout(0, 0, w, h)
+        val composed = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(composed))
+        save(composed, "${name}_widget.png")
+    }
+
     companion object {
         const val ACTION_REFRESH = "de.schumey.overhead.REFRESH"
         const val ACTION_TICK = "de.schumey.overhead.TICK"
-        private const val ROW_HEIGHT_DP = 68
-        private const val CHROME_HEIGHT_DP = 48
+        const val ACTION_DUMP = "de.schumey.overhead.DUMP"
 
         /** Asks the widget to refresh now (used by the app after a settings change). */
         fun refreshNow(ctx: Context) {
@@ -93,77 +123,57 @@ class FlightWidget : AppWidgetProvider() {
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, FlightWidget::class.java))
             if (ids.isEmpty()) return
             val snapshot = Snapshot.fromJson(Prefs(ctx).snapshotJson)
-            for (id in ids) mgr.updateAppWidget(id, build(ctx, mgr, id, snapshot, loading))
+            for (id in ids) {
+                val (w, h) = sizePx(ctx, mgr, id)
+                mgr.updateAppWidget(id, build(ctx, snapshot, loading, w, h))
+            }
         }
 
-        private fun rowsFor(ctx: Context, mgr: AppWidgetManager, id: Int): Int {
+        /** Size of this widget instance in pixels, from what the launcher reports (it differs by orientation). */
+        private fun sizePx(ctx: Context, mgr: AppWidgetManager, id: Int): Pair<Int, Int> {
             val o = mgr.getAppWidgetOptions(id)
             val portrait = ctx.resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
-            val h = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-            return if (h <= 0) 2 else ((h - CHROME_HEIGHT_DP) / ROW_HEIGHT_DP).coerceIn(1, 4)
+            var wDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+            var hDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+            if (wDp <= 0 || hDp <= 0) { wDp = 320; hDp = 200 }
+            val d = ctx.resources.displayMetrics.density
+            return (wDp * d).toInt() to (hDp * d).toInt()
         }
 
-        private fun build(ctx: Context, mgr: AppWidgetManager, id: Int, snap: Snapshot?, loading: Boolean): RemoteViews {
+        private fun build(ctx: Context, snap: Snapshot?, loading: Boolean, w: Int, h: Int): RemoteViews {
             val rv = RemoteViews(ctx.packageName, R.layout.widget)
-            val prefs = Prefs(ctx)
-            val now = System.currentTimeMillis()
-            val openApp = PendingIntent.getActivity(
-                ctx, 1, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            rv.setOnClickPendingIntent(R.id.tv_title, openApp)
-            rv.setOnClickPendingIntent(R.id.btn_refresh, PendingIntent.getBroadcast(
-                ctx, 2, Intent(ctx, FlightWidget::class.java).setAction(ACTION_REFRESH),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            ))
-
-            rv.setTextViewText(R.id.tv_status, when {
-                loading -> ctx.getString(R.string.loading_short)
-                snap != null && snap.error != Snapshot.ERR_LOCATION -> ctx.getString(R.string.updated, Fmt.time(snap.time))
-                else -> ""
-            })
-            rv.removeAllViews(R.id.rows)
-
-            val message: String? = when {
-                snap == null -> ctx.getString(R.string.loading)
-                snap.error == Snapshot.ERR_LOCATION -> ctx.getString(R.string.err_location)
-                snap.flights.isEmpty() && snap.error == Snapshot.ERR_NETWORK -> ctx.getString(R.string.err_network)
-                snap.flights.isEmpty() -> ctx.getString(R.string.empty, prefs.radiusKm)
-                else -> null
-            }
-            if (message != null) {
-                rv.setViewVisibility(R.id.tv_message, View.VISIBLE)
-                rv.setTextViewText(R.id.tv_message, message)
-                rv.setOnClickPendingIntent(R.id.tv_message, openApp)
-                return rv
-            }
+            val poster = Poster.render(ctx, snap, w, h, System.currentTimeMillis(), loading)
+            rv.setImageViewBitmap(R.id.poster, poster.bitmap)
+            rv.setContentDescription(R.id.poster, poster.description.ifEmpty { ctx.getString(R.string.widget_title) })
             rv.setViewVisibility(R.id.tv_message, View.GONE)
 
-            snap!!.flights.take(rowsFor(ctx, mgr, id)).forEachIndexed { i, f ->
-                val t = Fmt.text(ctx, f, now)
-                val row = RemoteViews(ctx.packageName, R.layout.widget_row)
-                row.setTextViewText(R.id.row_title, t.title)
-                row.setTextViewText(R.id.row_distance, t.distance)
-                setOrHide(row, R.id.row_route, t.route)
-                setOrHide(row, R.id.row_eta, t.eta)
-                setOrHide(row, R.id.row_details, t.details.ifEmpty { null })
-                // Tap a row: open that aircraft on a live map.
-                row.setOnClickPendingIntent(R.id.row_root, PendingIntent.getActivity(
-                    ctx, 100 + i,
-                    Intent(Intent.ACTION_VIEW, Uri.parse("https://globe.adsbexchange.com/?icao=${f.hex.lowercase()}")),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                ))
-                rv.addView(R.id.rows, row)
+            val immutable = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            val openApp = PendingIntent.getActivity(ctx, 1, Intent(ctx, MainActivity::class.java), immutable)
+            rv.setOnClickPendingIntent(R.id.zone_refresh, PendingIntent.getBroadcast(
+                ctx, 2, Intent(ctx, FlightWidget::class.java).setAction(ACTION_REFRESH), immutable,
+            ))
+
+            // Tap zones: the sky opens the app, each text row opens that aircraft on a live map.
+            val px = TypedValue.COMPLEX_UNIT_PX
+            rv.setViewLayoutHeight(R.id.zone_sky, (poster.rows.firstOrNull()?.get(0) ?: h).toFloat(), px)
+            rv.setOnClickPendingIntent(R.id.zone_sky, openApp)
+            val zones = intArrayOf(R.id.zone_1, R.id.zone_2, R.id.zone_3)
+            zones.forEachIndexed { i, zone ->
+                val row = poster.rows.getOrNull(i)
+                val flight = snap?.flights?.getOrNull(i)
+                if (row == null || flight == null) {
+                    rv.setViewVisibility(zone, View.GONE)
+                } else {
+                    rv.setViewVisibility(zone, View.VISIBLE)
+                    rv.setViewLayoutHeight(zone, (row[1] - row[0]).toFloat(), px)
+                    rv.setOnClickPendingIntent(zone, PendingIntent.getActivity(
+                        ctx, 100 + i,
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://globe.adsbexchange.com/?icao=${flight.hex.lowercase()}")),
+                        immutable,
+                    ))
+                }
             }
             return rv
-        }
-
-        private fun setOrHide(rv: RemoteViews, viewId: Int, text: String?) {
-            if (text == null) {
-                rv.setViewVisibility(viewId, View.GONE)
-            } else {
-                rv.setViewVisibility(viewId, View.VISIBLE)
-                rv.setTextViewText(viewId, text)
-            }
         }
     }
 }

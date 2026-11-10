@@ -86,14 +86,17 @@ object FlightApi {
             val code = o.str("iata_code") ?: o.str("icao_code") ?: return null
             return Airport(code, o.str("municipality") ?: o.str("name") ?: "", lat, lon)
         }
+        val airline = fr.optJSONObject("airline")
         return RouteInfo(
-            airline = fr.optJSONObject("airline")?.str("name"),
+            airline = airline?.str("name"),
             origin = airport(fr.optJSONObject("origin")),
             destination = airport(fr.optJSONObject("destination")),
+            flightNo = fr.str("callsign_iata") ?: fr.str("callsign"),
+            airlineIcao = airline?.str("icao"),
         )
     }
 
-    private fun get(url: String, allow404: Boolean = false): Pair<Int, String> {
+    internal fun get(url: String, allow404: Boolean = false): Pair<Int, String> {
         val c = URL(url).openConnection() as HttpURLConnection
         try {
             c.connectTimeout = 5_000

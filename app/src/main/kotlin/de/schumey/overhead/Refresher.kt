@@ -34,7 +34,10 @@ object Refresher {
 
         val top = nearby.filter { !it.onGround }.sortedBy { it.slantKm }.take(MAX_FLIGHTS)
         val flights = withRoutes(prefs, top, now)
-        return save(prefs, Snapshot(now, lat, lon, radius, flights, null))
+        // Decoration for the poster; a failure here must never cost the flights.
+        val place = Places.name(ctx, prefs, lat, lon, now)
+        val weather = Weather.current(prefs, lat, lon, now)
+        return save(prefs, Snapshot(now, lat, lon, radius, flights, null, place, weather.cloudCover, weather.precipMm))
     }
 
     private fun position(ctx: Context, prefs: Prefs): Pair<Double, Double>? {
@@ -77,7 +80,7 @@ object Refresher {
         }
 
         return flights.map { f ->
-            val withRoute = f.copy(route = routes[f.callsign])
+            val withRoute = Eta.orient(f.copy(route = routes[f.callsign]))
             withRoute.copy(etaMillis = Eta.estimate(withRoute, now))
         }
     }

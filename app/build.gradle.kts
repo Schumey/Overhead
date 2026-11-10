@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId = "de.schumey.overhead"
-        minSdk = 30
+        minSdk = 31
         // Sideloaded APK: target 34 keeps the layout below the system bars (no forced edge-to-edge).
         targetSdk = 34
         versionCode = 1

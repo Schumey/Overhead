@@ -5,7 +5,15 @@ import org.json.JSONObject
 
 data class Airport(val iata: String, val city: String, val lat: Double, val lon: Double)
 
-data class RouteInfo(val airline: String?, val origin: Airport?, val destination: Airport?)
+data class RouteInfo(
+    val airline: String?,
+    val origin: Airport?,
+    val destination: Airport?,
+    /** Passenger-style flight number (AF274) when the database has one; the callsign (AFR274) otherwise. */
+    val flightNo: String? = null,
+    /** ICAO code of the airline (AFR), used to pick livery colours. */
+    val airlineIcao: String? = null,
+)
 
 data class Flight(
     val hex: String,
@@ -38,6 +46,11 @@ data class Snapshot(
     val radiusKm: Int,
     val flights: List<Flight>,
     val error: String?,
+    /** Name of the place under the observer (city), for the poster headline. */
+    val place: String? = null,
+    /** Cloud cover in percent and precipitation in mm, for the sky on the poster. */
+    val cloudCover: Int? = null,
+    val precipMm: Double? = null,
 ) {
     fun toJson(): String = JSONObject().apply {
         put("time", time)
@@ -45,6 +58,9 @@ data class Snapshot(
         putOpt("lon", lon)
         put("radiusKm", radiusKm)
         putOpt("error", error)
+        putOpt("place", place)
+        putOpt("cloud", cloudCover)
+        putOpt("precip", precipMm)
         put("flights", JSONArray().also { arr -> flights.forEach { arr.put(it.toJson()) } })
     }.toString()
 
@@ -64,6 +80,9 @@ data class Snapshot(
                     radiusKm = o.optInt("radiusKm", 25),
                     flights = (0 until arr.length()).map { flightFromJson(arr.getJSONObject(it)) },
                     error = o.str("error"),
+                    place = o.str("place"),
+                    cloudCover = o.int("cloud"),
+                    precipMm = o.dbl("precip"),
                 )
             } catch (e: Exception) {
                 null
@@ -89,12 +108,17 @@ private fun airportFromJson(o: JSONObject?): Airport? =
 
 fun RouteInfo.toJson(): JSONObject = JSONObject().apply {
     putOpt("airline", airline)
+    putOpt("flightNo", flightNo)
+    putOpt("airlineIcao", airlineIcao)
     origin?.let { put("origin", it.toJson()) }
     destination?.let { put("destination", it.toJson()) }
 }
 
 fun routeFromJson(o: JSONObject): RouteInfo =
-    RouteInfo(o.str("airline"), airportFromJson(o.optJSONObject("origin")), airportFromJson(o.optJSONObject("destination")))
+    RouteInfo(
+        o.str("airline"), airportFromJson(o.optJSONObject("origin")), airportFromJson(o.optJSONObject("destination")),
+        o.str("flightNo"), o.str("airlineIcao"),
+    )
 
 private fun Flight.toJson(): JSONObject = JSONObject().apply {
     put("hex", hex); put("callsign", callsign); putOpt("registration", registration); putOpt("type", type)

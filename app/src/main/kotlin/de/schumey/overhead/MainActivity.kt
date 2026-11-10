@@ -13,6 +13,7 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
@@ -24,6 +25,7 @@ import kotlin.concurrent.thread
 /** Shows the same data as the widget in full, and holds the settings. */
 class MainActivity : Activity() {
     private lateinit var prefs: Prefs
+    private lateinit var poster: ImageView
     private lateinit var status: TextView
     private lateinit var list: LinearLayout
     private lateinit var gpsSwitch: Switch
@@ -86,6 +88,10 @@ class MainActivity : Activity() {
 
     private fun showSnapshot(s: Snapshot?) {
         list.removeAllViews()
+        val wPx = resources.displayMetrics.widthPixels - dp(32)
+        val rendered = Poster.render(this, s, wPx, (wPx * 0.85f).toInt(), System.currentTimeMillis(), loading = s == null)
+        poster.setImageBitmap(rendered.bitmap)
+        poster.contentDescription = rendered.description.ifEmpty { getString(R.string.widget_title) }
         if (s == null) {
             status.text = getString(R.string.loading)
             return
@@ -130,6 +136,11 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(8), dp(16), dp(24))
         }
+        poster = ImageView(this).apply {
+            adjustViewBounds = true
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(8) }
+        }
+        root.addView(poster)
         status = text("", 14f, color = R.color.text_secondary)
         root.addView(status)
         root.addView(Button(this).apply {

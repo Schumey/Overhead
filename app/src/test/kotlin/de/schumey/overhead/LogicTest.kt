@@ -21,7 +21,7 @@ class LogicTest {
     """.trimIndent()
 
     private val route = """
-        {"response":{"flightroute":{"callsign":"AFR274","airline":{"name":"Air France"},
+        {"response":{"flightroute":{"callsign":"AFR274","callsign_iata":"AF274","airline":{"name":"Air France","icao":"AFR"},
           "origin":{"iata_code":"CDG","icao_code":"LFPG","municipality":"Paris","latitude":49.0128,"longitude":2.55},
           "destination":{"iata_code":"HND","icao_code":"RJTT","municipality":"Tokyo","latitude":35.5523,"longitude":139.78}}}}
     """.trimIndent()
@@ -65,6 +65,8 @@ class LogicTest {
     fun parsesRoute() {
         val r = FlightApi.parseRoute(route)!!
         assertEquals("Air France", r.airline)
+        assertEquals("AF274", r.flightNo)
+        assertEquals("AFR", r.airlineIcao)
         assertEquals("CDG", r.origin!!.iata)
         assertEquals("Tokyo", r.destination!!.city)
         assertNull(FlightApi.parseRoute("""{"response":"unknown callsign"}"""))
@@ -114,6 +116,56 @@ class LogicTest {
         assertEquals(s, back)
         assertNull(Snapshot.fromJson("not json"))
         assertNotNull(Snapshot.fromJson("""{"time":1,"flights":[]}"""))
+    }
+
+    @Test
+    fun routeIsSwappedWhenFlownTheOtherWay() {
+        val berlin = Airport("BER", "Berlin", 52.36, 13.5)
+        val cologne = Airport("CGN", "Cologne", 50.87, 7.14)
+        val stored = RouteInfo(null, berlin, cologne) // database says Berlin -> Cologne
+        // Over Arnsberg-ish (51.4N 8.0E), flying east (track 90) = toward Berlin: the real leg is Cologne -> Berlin.
+        val east = flight(51.4, 8.0, 90.0, 600, null).copy(route = stored)
+        val fixedEast = Eta.orient(east).route!!
+        assertEquals("CGN", fixedEast.origin!!.iata)
+        assertEquals("BER", fixedEast.destination!!.iata)
+        // Flying west (track 270) = toward Cologne: as stored, and it gets an ETA.
+        val west = flight(51.4, 8.0, 270.0, 600, null).copy(route = stored)
+        assertEquals(west, Eta.orient(west))
+        assertNotNull(Eta.estimate(west, 0L))
+        // After the swap the eastbound aircraft has an ETA too (before, it had none because it flew away).
+        assertNull(Eta.estimate(east, 0L))
+        assertNotNull(Eta.estimate(Eta.orient(east), 0L))
+    }
+
+    @Test
+    fun sunAndMoon() {
+        fun ms(iso: String) = java.time.Instant.parse(iso).toEpochMilli()
+        // Frankfurt around solar noon at midsummer: 90 - 50.03 + 23.44 = 63.4 degrees.
+        assertEquals(63.4, Sky.sunElevationDeg(50.03, 8.57, ms("2026-06-21T11:26:00Z")), 1.0)
+        assertTrue(Sky.sunElevationDeg(50.03, 8.57, ms("2026-11-10T22:30:00Z")) < -20)
+        // The new moon was on 2026-11-09 (about 22:00 UTC); the evening after, it is a thin waxing crescent.
+        assertEquals(0.04, Sky.moonPhase(ms("2026-11-10T22:38:00Z")), 0.03)
+        // A full moon about two weeks later (2026-11-24).
+        assertEquals(0.5, Sky.moonPhase(ms("2026-11-24T14:00:00Z")), 0.04)
+    }
+
+    @Test
+    fun weatherParsing() {
+        val w = Weather.parse("""{"current":{"time":"2026-11-10T22:30","cloud_cover":100,"precipitation":0.40}}""")
+        assertEquals(100, w.cloudCover)
+        assertEquals(0.4, w.precipMm!!, 0.001)
+        assertNull(Weather.parse("""{"error":true}""").cloudCover)
+    }
+
+    @Test
+    fun liveriesAreStablePerAirline() {
+        val base = FlightApi.parseNearby(nearby, 50.03, 8.57)[0]
+        val dlh = base.copy(route = RouteInfo(null, null, null, "LH400", "DLH"))
+        assertEquals(Liveries.forFlight(dlh).primary, Liveries.forFlight(dlh.copy(callsign = "DLH401")).primary)
+        val unknown = base.copy(route = RouteInfo(null, null, null, "XX1", "ZZZ"))
+        assertEquals(Liveries.forFlight(unknown).primary, Liveries.forFlight(unknown).primary)
+        // General aviation (no airline callsign) gets the neutral scheme.
+        assertEquals(Liveries.neutral.primary, Liveries.forFlight(base.copy(callsign = "D-HHEC", route = null)).primary)
     }
 
     @Test

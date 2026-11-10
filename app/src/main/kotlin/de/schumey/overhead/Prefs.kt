@@ -36,9 +36,20 @@ class Prefs(ctx: Context) {
         get() = sp.getString("snapshot", null)
         set(v) = sp.edit().putString("snapshot", v).apply()
 
+    // "routes2": the route format gained flightNo/airlineIcao, so older cached entries are ignored.
     var routesJson: String?
-        get() = sp.getString("routes", null)
-        set(v) = sp.edit().putString("routes", v).apply()
+        get() = sp.getString("routes2", null)
+        set(v) = sp.edit().putString("routes2", v).apply()
+
+    /** Last weather lookup: {"t":time,"k":"lat,lon","c":cloud,"p":precip}. */
+    var weatherJson: String?
+        get() = sp.getString("weather", null)
+        set(v) = sp.edit().putString("weather", v).apply()
+
+    /** Last place-name lookup: {"t":time,"k":"lat,lon","n":name} (name empty if the lookup failed). */
+    var placeJson: String?
+        get() = sp.getString("place", null)
+        set(v) = sp.edit().putString("place", v).apply()
 }
 
 /**
