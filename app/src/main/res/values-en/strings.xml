@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Overhead</string>
+    <string name="widget_title">Planes overhead</string>
+    <string name="widget_description">Aircraft above your location with destination, arrival time, altitude and speed.</string>
+
+    <string name="updated">Updated %s</string>
+    <string name="loading">Loading aircraft …</string>
+    <string name="loading_short">loading …</string>
+    <string name="empty">No aircraft within %d km right now</string>
+    <string name="err_location">No location – tap here and allow location access</string>
+    <string name="err_location_app">No location available. Allow location access or save a fixed place.</string>
+    <string name="err_network">No connection to the flight data</string>
+    <string name="eta">Arrives approx. %1$s (%2$s)</string>
+    <string name="dur_now">any moment</string>
+    <string name="dur_min">in %d min</string>
+    <string name="dur_hm">in %1$d h %2$d min</string>
+
+    <string-array name="cardinals">
+        <item>N</item>
+        <item>NE</item>
+        <item>E</item>
+        <item>SE</item>
+        <item>S</item>
+        <item>SW</item>
+        <item>W</item>
+        <item>NW</item>
+    </string-array>
+
+    <plurals name="flights_count">
+        <item quantity="one">%d aircraft</item>
+        <item quantity="other">%d aircraft</item>
+    </plurals>
+
+    <string name="refresh">Refresh</string>
+    <string name="settings">Settings</string>
+    <string name="use_gps">Use GPS location</string>
+    <string name="grant_location">Allow location access</string>
+    <string name="grant_background">Allow in the background (for the widget)</string>
+    <string name="background_hint">The widget refreshes in the background. That needs location set to \"Allow all the time\"; otherwise it uses the fixed place.</string>
+    <string name="save_fixed">Save current location as fixed place</string>
+    <string name="fixed_none">No fixed place saved yet. It is used when GPS is off or not available in the background.</string>
+    <string name="fixed_at">Fixed place: %1$.4f, %2$.4f</string>
+    <string name="radius">Radius</string>
+    <string name="interval">Refresh the widget every (only while the screen is on)</string>
+    <string name="sources">Positions: adsb.lol. Routes: adsbdb.com. Your exact location stays on the device; a point rounded to about 1 km is looked up. The arrival time is an estimate from remaining distance and speed, not a schedule. Tap an aircraft to see it on a map.</string>
+</resources>

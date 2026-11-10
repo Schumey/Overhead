@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Overhead</string>
+    <string name="widget_title">Flugzeuge über mir</string>
+    <string name="widget_description">Flugzeuge über deinem Standort mit Ziel, Ankunftszeit, Höhe und Geschwindigkeit.</string>
+
+    <string name="updated">Stand %s</string>
+    <string name="loading">Lade Flugzeuge …</string>
+    <string name="loading_short">lädt …</string>
+    <string name="empty">Gerade kein Flugzeug im Umkreis von %d km</string>
+    <string name="err_location">Kein Standort – tippe hier und erlaube den Standortzugriff</string>
+    <string name="err_location_app">Kein Standort verfügbar. Erlaube den Standortzugriff oder speichere einen festen Ort.</string>
+    <string name="err_network">Keine Verbindung zu den Flugdaten</string>
+    <string name="eta">Ankunft ca. %1$s (%2$s)</string>
+    <string name="dur_now">gleich</string>
+    <string name="dur_min">in %d min</string>
+    <string name="dur_hm">in %1$d h %2$d min</string>
+
+    <string-array name="cardinals">
+        <item>N</item>
+        <item>NO</item>
+        <item>O</item>
+        <item>SO</item>
+        <item>S</item>
+        <item>SW</item>
+        <item>W</item>
+        <item>NW</item>
+    </string-array>
+
+    <plurals name="flights_count">
+        <item quantity="one">%d Flugzeug</item>
+        <item quantity="other">%d Flugzeuge</item>
+    </plurals>
+
+    <string name="refresh">Aktualisieren</string>
+    <string name="settings">Einstellungen</string>
+    <string name="use_gps">GPS-Standort verwenden</string>
+    <string name="grant_location">Standortzugriff erlauben</string>
+    <string name="grant_background">Im Hintergrund erlauben (für das Widget)</string>
+    <string name="background_hint">Das Widget aktualisiert sich im Hintergrund. Dafür muss der Standort „Immer“ erlaubt sein, sonst nutzt es den festen Ort.</string>
+    <string name="save_fixed">Aktuellen Standort als festen Ort speichern</string>
+    <string name="fixed_none">Noch kein fester Ort gespeichert. Er wird genutzt, wenn GPS aus ist oder im Hintergrund nicht verfügbar.</string>
+    <string name="fixed_at">Fester Ort: %1$.4f, %2$.4f</string>
+    <string name="radius">Umkreis</string>
+    <string name="interval">Widget aktualisieren alle (nur bei eingeschaltetem Display)</string>
+    <string name="sources">Positionen: adsb.lol. Routen: adsbdb.com. Dein genauer Standort bleibt auf dem Gerät, abgefragt wird ein auf etwa 1 km gerundeter Punkt. Die Ankunftszeit ist eine Schätzung aus Restdistanz und Geschwindigkeit, kein Fahrplan. Tippe auf ein Flugzeug, um es auf der Karte zu sehen.</string>
+</resources>
