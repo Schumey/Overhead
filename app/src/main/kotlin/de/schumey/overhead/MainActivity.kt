@@ -13,6 +13,8 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -34,6 +36,7 @@ class MainActivity : Activity() {
     private lateinit var permButton: Button
     private lateinit var backgroundButton: Button
     private lateinit var fixedText: TextView
+    private lateinit var calBox: LinearLayout
 
     private val ui = Handler(Looper.getMainLooper())
     private var busy = false
@@ -43,6 +46,8 @@ class MainActivity : Activity() {
             ui.postDelayed(this, 30_000)
         }
     }
+
+    private companion object { const val CALENDAR_REQUEST = 3 }
 
     private val radii = listOf(10, 25, 50, 100)
     private val intervals = listOf(1, 2, 5, 15, 30)
@@ -68,6 +73,10 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         updateSettingsUi()
+        if (requestCode == CALENDAR_REQUEST) {
+            refreshCalendarWidgets()
+            return
+        }
         refresh()
         FlightWidget.refreshNow(this)
     }
@@ -235,6 +244,10 @@ class MainActivity : Activity() {
             }
         })
 
+        root.addView(text(getString(R.string.cal_section), 18f, bold = true).apply { setPadding(0, dp(28), 0, dp(4)) })
+        calBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(calBox)
+
         root.addView(text(getString(R.string.sources), 12f, color = R.color.text_secondary).apply { setPadding(0, dp(28), 0, 0) })
         return ScrollView(this).apply { addView(root) }
     }
@@ -259,7 +272,94 @@ class MainActivity : Activity() {
             if (hasLoc && !LocationHelper.hasBackground(this) && FlightWidget.hasWidgets(this)) View.VISIBLE else View.GONE
         val lat = prefs.fixedLat
         val lon = prefs.fixedLon
+        buildCalendarSection()
         fixedText.text = if (lat != null && lon != null) getString(R.string.fixed_at, lat, lon) else getString(R.string.fixed_none)
+    }
+
+    // --- calendars ---
+
+    private fun refreshCalendarWidgets() {
+        CalendarWidget.renderAll(this)
+        DayWidget.renderAll(this)
+    }
+
+    private fun buildCalendarSection() {
+        calBox.removeAllViews()
+        if (!Calendars.hasPermission(this)) {
+            calBox.addView(Button(this).apply {
+                setText(R.string.cal_grant)
+                setOnClickListener { requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR), CALENDAR_REQUEST) }
+            })
+        } else {
+            calBox.addView(text(getString(R.string.cal_devices_hint), 12f, color = R.color.text_secondary))
+            val cals = Calendars.deviceCalendars(this)
+            if (cals.isEmpty()) calBox.addView(text(getString(R.string.cal_devices_none), 14f).apply { setPadding(0, dp(8), 0, 0) })
+            val selected = prefs.calendarIds
+            val boxes = ArrayList<Pair<Long, CheckBox>>()
+            for (cal in cals) {
+                val box = CheckBox(this).apply {
+                    text = if (cal.account.isNotEmpty() && cal.account != cal.name) "${cal.name} · ${cal.account}" else cal.name
+                    setTextColor(getColor(R.color.text_primary))
+                    isChecked = if (selected == null) cal.visible else cal.id in selected
+                    setOnCheckedChangeListener { _, _ ->
+                        prefs.calendarIds = boxes.filter { it.second.isChecked }.map { it.first }.toSet()
+                        refreshCalendarWidgets()
+                    }
+                }
+                boxes += cal.id to box
+                calBox.addView(box)
+            }
+        }
+        calBox.addView(text(getString(R.string.cal_links_hint), 12f, color = R.color.text_secondary).apply { setPadding(0, dp(16), 0, 0) })
+        for (url in prefs.calendarUrls) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+            row.addView(text(url, 12f).apply {
+                layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            })
+            row.addView(Button(this).apply {
+                setText(R.string.cal_link_remove)
+                setOnClickListener {
+                    prefs.calendarUrls = prefs.calendarUrls - url
+                    Calendars.forgetLink(this@MainActivity, url)
+                    refreshCalendarWidgets()
+                    buildCalendarSection()
+                }
+            })
+            calBox.addView(row)
+        }
+        val field = EditText(this).apply {
+            hint = getString(R.string.cal_link_field)
+            setSingleLine()
+            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setTextColor(getColor(R.color.text_primary))
+        }
+        calBox.addView(field)
+        calBox.addView(Button(this).apply {
+            setText(R.string.cal_link_add)
+            setOnClickListener {
+                val url = Calendars.normalizeUrl(field.text.toString())
+                if (url == null) {
+                    Toast.makeText(this@MainActivity, R.string.cal_link_invalid, Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                isEnabled = false
+                thread {
+                    val ok = try { Calendars.fetchOnce(this@MainActivity, url); true } catch (e: Exception) { false }
+                    runOnUiThread {
+                        isEnabled = true
+                        if (!ok) {
+                            Toast.makeText(this@MainActivity, R.string.cal_link_failed, Toast.LENGTH_LONG).show()
+                        } else {
+                            if (url !in prefs.calendarUrls) prefs.calendarUrls = prefs.calendarUrls + url
+                            refreshCalendarWidgets()
+                            buildCalendarSection()
+                        }
+                    }
+                }
+            }
+        })
     }
 
     private fun saveFixedPlace() {

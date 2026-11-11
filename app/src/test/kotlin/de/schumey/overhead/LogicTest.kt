@@ -210,6 +210,48 @@ class LogicTest {
     }
 
     @Test
+    fun parsesTheForecast() {
+        // Trimmed from a real Open-Meteo response (timezone=auto: local times plus utc_offset_seconds).
+        val json = """
+            {"utc_offset_seconds":3600,
+             "current":{"time":"2026-11-11T10:45","temperature_2m":6.8,"apparent_temperature":5.3,"relative_humidity_2m":97,
+                        "precipitation":0.0,"weather_code":45,"cloud_cover":100,"wind_speed_10m":4.1,"wind_direction_10m":218,"is_day":1},
+             "hourly":{"time":["2026-11-11T10:00","2026-11-11T11:00"],"temperature_2m":[6.5,7.2],
+                       "precipitation_probability":[10,null],"weather_code":[45,3],"is_day":[1,1]},
+             "daily":{"time":["2026-11-11","2026-11-12"],"weather_code":[80,3],"temperature_2m_max":[9.6,8.1],
+                      "temperature_2m_min":[4.8,3.0],"precipitation_sum":[2.8,0.0],"precipitation_probability_max":[100,null],
+                      "sunrise":["2026-11-11T07:31","2026-11-12T07:32"],"sunset":["2026-11-11T16:46","2026-11-12T16:45"]}}
+        """.trimIndent()
+        val f = Forecasts.parse(json)!!
+        assertEquals(java.time.Instant.parse("2026-11-11T09:45:00Z").toEpochMilli(), f.time) // 10:45 at UTC+1
+        assertEquals(6.8, f.tempC, 0.001)
+        assertEquals(5.3, f.feelsC!!, 0.001)
+        assertEquals(97, f.humidity)
+        assertEquals(218, f.windDir)
+        assertTrue(f.isDay)
+        assertEquals(WeatherKind.FOG, WeatherKind.of(f.code))
+        assertEquals(2, f.hours.size)
+        assertEquals(10, f.hours[0].precipProb)
+        assertNull(f.hours[1].precipProb) // a null in the array is "unknown", not 0
+        assertEquals(2, f.days.size)
+        assertEquals(java.time.Instant.parse("2026-11-11T06:31:00Z").toEpochMilli(), f.days[0].sunrise)
+        assertEquals(java.time.Instant.parse("2026-11-10T23:00:00Z").toEpochMilli(), f.days[0].day) // local midnight
+        assertNull(Forecasts.parse("""{"error":true}"""))
+    }
+
+    @Test
+    fun weatherCodesGroupIntoKinds() {
+        assertEquals(WeatherKind.CLEAR, WeatherKind.of(0))
+        assertEquals(WeatherKind.RAIN, WeatherKind.of(63))
+        assertEquals(WeatherKind.SHOWERS, WeatherKind.of(81))
+        assertEquals(WeatherKind.SNOW, WeatherKind.of(73))
+        assertEquals(WeatherKind.THUNDER, WeatherKind.of(96))
+        assertEquals(WeatherKind.OVERCAST, WeatherKind.of(999)) // unknown codes are treated as plain cloud
+        assertTrue(WeatherKind.SNOW_SHOWERS.isSnowy && WeatherKind.SNOW_SHOWERS.isWet)
+        assertTrue(!WeatherKind.FOG.isWet)
+    }
+
+    @Test
     fun sunAndMoon() {
         fun ms(iso: String) = java.time.Instant.parse(iso).toEpochMilli()
         // Frankfurt around solar noon at midsummer: 90 - 50.03 + 23.44 = 63.4 degrees.
@@ -249,5 +291,50 @@ class LogicTest {
         assertNull(RouteCache.lookup(store, "ZZZ9", 0L))
         RouteCache.put(store, "DEF2", FlightApi.parseRoute(route), 0L)
         assertEquals("HND", RouteCache.lookup(store, "DEF2", 3_600_000L)!!.route!!.destination!!.iata)
+    }
+
+    @Test
+    fun parsesIcsEventsAndRepeats() {
+        val cal = java.util.Calendar.getInstance().apply { clear(); set(2026, 10, 11, 0, 0, 0) } // Wed 11 Nov 2026
+        val from = cal.timeInMillis
+        val to = from + 14 * 86_400_000L
+        val ics = """
+            BEGIN:VCALENDAR
+            BEGIN:VEVENT
+            UID:a
+            SUMMARY:Zahnarzt\, Dr. Meier
+            DTSTART:20261112T130000Z
+            DTEND:20261112T140000Z
+            END:VEVENT
+            BEGIN:VEVENT
+            UID:b
+            SUMMARY:Urlaub
+            DTSTART;VALUE=DATE:20261115
+            DTEND;VALUE=DATE:20261117
+            END:VEVENT
+            BEGIN:VEVENT
+            UID:c
+            SUMMARY:Sport
+            DTSTART:20261102T180000
+            DTEND:20261102T190000
+            RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=6
+            EXDATE:20261111T180000
+            END:VEVENT
+            BEGIN:VEVENT
+            UID:d
+            SUMMARY:Abgesagt
+            STATUS:CANCELLED
+            DTSTART:20261113T100000Z
+            END:VEVENT
+            END:VCALENDAR
+        """.trimIndent()
+        val ev = Calendars.parseIcs(ics, from, to, 0, "t").sortedBy { it.start }
+        assertEquals("Zahnarzt, Dr. Meier", ev.first { it.title.startsWith("Zahnarzt") }.title)
+        val off = ev.first { it.title == "Urlaub" }
+        assertTrue(off.allDay)
+        assertEquals(2 * 86_400_000L, off.end - off.start)
+        // Mon 2, Wed 4, Mon 9, Wed 11 (excluded), Mon 16, Wed 18: that is six; the window from Wed 11 keeps Mon 16 and Wed 18
+        assertEquals(2, ev.count { it.title == "Sport" })
+        assertTrue(ev.none { it.title == "Abgesagt" })
     }
 }

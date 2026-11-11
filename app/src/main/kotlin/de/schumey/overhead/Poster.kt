@@ -79,7 +79,7 @@ object Poster {
         val skyBottom = if (shown == 0) h else h - blocksH - sepH
 
         // ---- sky ----
-        drawSky(c, snap, now, w, skyBottom, d, headerH)
+        SkyArt.draw(c, snap?.lat, snap?.lon, now, SkyArt.Conditions(cloud = (snap?.cloudCover ?: 40) / 100f, precipMm = snap?.precipMm ?: 0.0), w, skyBottom, d, headerH)
         val scene = flights.take(shown)
         drawPlanes(c, scene, w, skyBottom, d, headerH)
         if (shown == 0) drawMessage(c, ctx, snap, loading, w, skyBottom, pad, d)
@@ -240,111 +240,6 @@ object Poster {
         c.translate(pad * 2, (skyH - layout.height) / 2 + 8f * d)
         layout.draw(c)
         c.restore()
-    }
-
-    // ------------------------------------------------------------------ sky
-
-    internal fun lerp(a: Int, b: Int, t: Float): Int {
-        fun ch(shift: Int) = (((a shr shift) and 0xFF) + ((((b shr shift) and 0xFF) - ((a shr shift) and 0xFF)) * t)).roundToInt()
-        return (ch(24) shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
-    }
-
-    private fun stop(night: Int, dusk: Int, day: Int, f: Float) =
-        if (f < 0.5f) lerp(night, dusk, f * 2) else lerp(dusk, day, (f - 0.5f) * 2)
-
-    private fun drawSky(c: Canvas, snap: Snapshot?, now: Long, w: Float, skyH: Float, d: Float, headerH: Float) {
-        val lat = snap?.lat
-        val lon = snap?.lon
-        // f: 0 = night, 1 = day, smooth through twilight.
-        val f = if (lat != null && lon != null) ((Sky.sunElevationDeg(lat, lon, now) + 6) / 12).coerceIn(0.0, 1.0).toFloat() else 0f
-        val cloud = (snap?.cloudCover ?: 40) / 100f
-        val precip = snap?.precipMm ?: 0.0
-
-        var top = stop(0xFF1C1B18.toInt(), 0xFF3B3F63.toInt(), 0xFF5B8DB8.toInt(), f)
-        var bottom = stop(0xFF282723.toInt(), 0xFFD98A5B.toInt(), 0xFFB4D2E6.toInt(), f)
-        if (f > 0.5f && cloud > 0.7f) { // overcast day: grey it down
-            val g = (cloud - 0.7f) / 0.3f * 0.5f * f
-            top = lerp(top, 0xFF8794A0.toInt(), g); bottom = lerp(bottom, 0xFFA9B2BA.toInt(), g)
-        }
-        c.drawRect(0f, 0f, w, skyH, Paint().apply { shader = LinearGradient(0f, 0f, 0f, skyH, top, bottom, Shader.TileMode.CLAMP) })
-
-        val rnd = Random(now / 600_000L * 31 + 7) // the scene changes every 10 minutes, not on every redraw
-        c.save()
-        c.clipRect(0f, 0f, w, skyH)
-
-        // Stars
-        if (f < 0.6f) {
-            val sp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
-            val n = max(10, (46 * (1 - cloud)).toInt())
-            repeat(n) {
-                sp.alpha = ((60 + rnd.nextInt(130)) * (1 - f / 0.6f)).toInt()
-                c.drawCircle(rnd.nextFloat() * w, rnd.nextFloat() * skyH * 0.7f, (0.5f + rnd.nextFloat() * 1.1f) * d, sp)
-            }
-        }
-        // Moon (real phase) at night, sun by day
-        val bodyX = if (f < 0.6f) w * 0.86f else w * 0.14f
-        val bodyY = max(headerH + 18f * d, skyH * 0.30f)
-        val bodyR = 15f * d
-        if (f < 0.6f) drawMoon(c, bodyX, bodyY, bodyR, Sky.moonPhase(now), ((1 - f / 0.6f) * 255).toInt())
-        else if (f > 0.7f && cloud < 0.6f) {
-            c.drawCircle(bodyX, bodyY, bodyR, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFE9A8.toInt(); alpha = (f * 255).toInt() })
-        }
-
-        // Clouds: they keep clear of the moon (or sun) so it stays visible even under an overcast sky
-        val cp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = lerp(0xFF3A3935.toInt(), lerp(0xFFFFFFFF.toInt(), 0xFFC4CBD2.toInt(), cloud), f)
-            alpha = 235
-        }
-        repeat((cloud * 4).roundToInt().coerceAtLeast(if (cloud > 0.15f) 1 else 0)) {
-            var cw: Float
-            var cx: Float
-            var cy: Float
-            var tries = 0
-            do {
-                cw = w * (0.22f + rnd.nextFloat() * 0.24f)
-                cx = rnd.nextFloat() * w
-                cy = skyH * (0.14f + rnd.nextFloat() * 0.6f)
-                tries++
-            } while (tries < 10 && kotlin.math.abs(cx - bodyX) < cw * 0.55f + bodyR * 1.8f && kotlin.math.abs(cy - bodyY) < cw * 0.3f + bodyR * 1.8f)
-            drawCloud(c, cp, cx, cy, cw)
-        }
-
-        // Rain
-        if (precip >= 0.05) {
-            c.drawRect(0f, skyH * 0.28f, w, skyH, Paint().apply { color = 0xFFFFFFFF.toInt(); alpha = 14 })
-            val rp = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
-            repeat(min(150, (24 + precip * 30).toInt())) {
-                val len = (14 + rnd.nextFloat() * 34f) * d
-                val x = rnd.nextFloat() * (w + len)
-                val y = skyH * 0.12f + rnd.nextFloat() * skyH * 0.9f
-                rp.strokeWidth = (0.7f + rnd.nextFloat() * 0.9f) * d
-                rp.color = if (f > 0.5f) 0xFF5E6B77.toInt() else 0xFFB4B1A6.toInt()
-                rp.alpha = 40 + rnd.nextInt(80) // after the colour: setting a colour resets the alpha
-                c.drawLine(x + len * 0.22f, y - len, x, y, rp)
-            }
-        }
-        c.restore()
-    }
-
-    private fun drawCloud(c: Canvas, p: Paint, cx: Float, cy: Float, w: Float) {
-        val h = w * 0.26f
-        c.drawOval(RectF(cx - w * 0.5f, cy - h * 0.5f, cx + w * 0.5f, cy + h * 0.5f), p)
-        c.drawOval(RectF(cx - w * 0.30f, cy - h * 1.15f, cx + w * 0.10f, cy + h * 0.2f), p)
-        c.drawOval(RectF(cx - w * 0.04f, cy - h * 0.85f, cx + w * 0.34f, cy + h * 0.25f), p)
-    }
-
-    /** Moon with its real phase: [phase] 0 = new, 0.5 = full, waxing lit on the right (northern hemisphere). */
-    private fun drawMoon(c: Canvas, cx: Float, cy: Float, r: Float, phase: Double, alpha: Int) {
-        val oval = RectF(cx - r, cy - r, cx + r, cy + r)
-        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF3A3935.toInt(); this.alpha = alpha })
-        val k = kotlin.math.cos(2 * Math.PI * phase).toFloat() // 1 new .. -1 full
-        val s = if (phase < 0.5) 1f else -1f
-        val path = Path()
-        path.arcTo(oval, -90f, 180f * s, true)
-        val term = RectF(cx - kotlin.math.abs(k) * r, cy - r, cx + kotlin.math.abs(k) * r, cy + r)
-        path.arcTo(term, 90f, -180f * s * sign(k), false)
-        path.close()
-        c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFD9D6CB.toInt(); this.alpha = alpha })
     }
 
     // ------------------------------------------------------------------ planes

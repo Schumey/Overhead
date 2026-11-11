@@ -41,6 +41,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("routes2", null)
         set(v) = sp.edit().putString("routes2", v).apply()
 
+    /** The weather widget's data: {"t":fetched,"lat","lon","place","raw":Open-Meteo response,"err":optional}. */
+    var forecastJson: String?
+        get() = sp.getString("forecast", null)
+        set(v) = sp.edit().putString("forecast", v).apply()
+
     /** Last airport lookup: {"t":time,"k":"lat,lon" (0.1 degree grid),"a":airport or absent if none was found}. */
     var airportJson: String?
         get() = sp.getString("airport", null)
@@ -62,6 +67,16 @@ class Prefs(ctx: Context) {
     var weatherJson: String?
         get() = sp.getString("weather", null)
         set(v) = sp.edit().putString("weather", v).apply()
+
+    /** Phone calendars shown in the calendar widget; null = every calendar the phone shows. */
+    var calendarIds: Set<Long>?
+        get() = sp.getString("calIds", null)?.split(',')?.mapNotNull { it.toLongOrNull() }?.toSet()
+        set(v) = sp.edit().putString("calIds", v?.joinToString(",")).apply()
+
+    /** ICS/webcal links added by the user (normalized to https). */
+    var calendarUrls: List<String>
+        get() = sp.getString("calUrls", null)?.split('\n')?.filter { it.isNotBlank() } ?: emptyList()
+        set(v) = sp.edit().putString("calUrls", v.joinToString("\n")).apply()
 
     /** Last place-name lookup: {"t":time,"k":"lat,lon","n":name} (name empty if the lookup failed). */
     var placeJson: String?

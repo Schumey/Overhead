@@ -10,5 +10,11 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         FlightWidget.scheduleNext(ctx)
         FlightWidget.renderAll(ctx)
+        WeatherWidget.scheduleNext(ctx)
+        WeatherWidget.renderAll(ctx)
+        CalendarWidget.scheduleNext(ctx)
+        CalendarWidget.renderAll(ctx)
+        DayWidget.scheduleNext(ctx)
+        DayWidget.renderAll(ctx)
     }
 }

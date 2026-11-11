@@ -82,7 +82,8 @@ object Refresher {
         return save(prefs, Snapshot(now, lat, lon, radius, flights, null, place, weather.cloudCover, weather.precipMm, airport, traffic))
     }
 
-    private fun position(ctx: Context, prefs: Prefs): Pair<Double, Double>? {
+    /** The position to use: the current one (GPS) or the saved fixed place; null if neither is available. */
+    internal fun position(ctx: Context, prefs: Prefs): Pair<Double, Double>? {
         if (prefs.useGps) {
             LocationHelper.current(ctx)?.let { return it.latitude to it.longitude }
         }

@@ -121,7 +121,7 @@ class FlightWidget : AppWidgetProvider() {
         const val ACTION_CYCLE = "de.schumey.overhead.CYCLE"
         const val ACTION_DUMP = "de.schumey.overhead.DUMP"
 
-        private val ZONES = intArrayOf(
+        internal val ZONES = intArrayOf(
             R.id.zone_1, R.id.zone_2, R.id.zone_3, R.id.zone_4, R.id.zone_5,
             R.id.zone_6, R.id.zone_7, R.id.zone_8, R.id.zone_9, R.id.zone_10,
         )
@@ -167,7 +167,7 @@ class FlightWidget : AppWidgetProvider() {
         }
 
         /** Size of this widget instance in pixels, from what the launcher reports (it differs by orientation). */
-        private fun sizePx(ctx: Context, mgr: AppWidgetManager, id: Int): Pair<Int, Int> {
+        internal fun sizePx(ctx: Context, mgr: AppWidgetManager, id: Int): Pair<Int, Int> {
             val o = mgr.getAppWidgetOptions(id)
             val portrait = ctx.resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
             var wDp = o.getInt(if (portrait) AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
