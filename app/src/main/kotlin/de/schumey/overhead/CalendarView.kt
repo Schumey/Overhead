@@ -23,7 +23,8 @@ object CalendarView {
     private const val GOLD = 0xFFE8B02F.toInt()
     private const val DAY_MS = 86_400_000L
 
-    fun render(ctx: Context, data: Calendars.Data?, wPx: Int, hPx: Int, now: Long, loading: Boolean = false): Rendered {
+    /** [clock]: a big split-flap clock on top (only where the picture is redrawn every minute, i.e. the dashboard). */
+    fun render(ctx: Context, data: Calendars.Data?, wPx: Int, hPx: Int, now: Long, loading: Boolean = false, clock: Boolean = false): Rendered {
         val d = ctx.resources.displayMetrics.density
         fun dp(v: Float) = v * d
         val w = wPx.toFloat()
@@ -39,6 +40,7 @@ object CalendarView {
         val pad = dp(16f)
         drawHeader(c, ctx, loading, now, w, pad, d)
         var y = dp(30f)
+        if (clock && h >= dp(280f)) y = drawFlapClock(c, now, w, pad, y + dp(2f), d)
 
         if (h >= dp(130f)) {
             y = drawDate(c, ctx, data, now, w, pad, y, d)
@@ -78,6 +80,49 @@ object CalendarView {
         c.drawText(Poster.fitLine(Poster.textPaint(Poster.mono, dp(9.5f), GOLD), line, maxW, dp(9.5f), dp(7f)), tx, top + dp(44f), Poster.textPaint(Poster.mono, dp(9.5f), GOLD))
         c.drawRect(pad, top + dp(52f), w - pad, top + dp(54f), Paint().apply { color = Poster.CREAM })
         return top + dp(62f)
+    }
+
+    /**
+     * The time as four flip tiles like an airport board: dark tiles with a seam across the middle, light digits,
+     * and a colon of two small blocks. Returns the y below it.
+     */
+    private fun drawFlapClock(c: Canvas, now: Long, w: Float, pad: Float, top: Float, d: Float): Float {
+        val text = SimpleDateFormat("HHmm", Locale.US).format(Date(now))
+        val colonW = 14f * d
+        val gap = 5f * d
+        val avail = w - 2 * pad - colonW - 4 * gap
+        val tw = (avail / 4f).coerceAtMost(46f * d)
+        val th = tw * 1.3f
+        val total = 4 * tw + colonW + 4 * gap
+        var x = (w - total) / 2f
+        val digitP = Poster.textPaint(Poster.heavy, th * 0.74f).apply { textAlign = Paint.Align.CENTER }
+        val fm = digitP.fontMetrics
+        val tileTop = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF37362F.toInt() }
+        val tileBottom = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2A2925.toInt() }
+        val seam = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF121110.toInt() }
+        val pin = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF121110.toInt() }
+        fun tile(ch: Char) {
+            val r = RectF(x, top, x + tw, top + th)
+            val mid = top + th / 2f
+            c.drawRoundRect(r, 5f * d, 5f * d, tileBottom)
+            c.save(); c.clipRect(r.left, r.top, r.right, mid)
+            c.drawRoundRect(r, 5f * d, 5f * d, tileTop)
+            c.restore()
+            c.drawText(ch.toString(), r.centerX(), mid - (fm.ascent + fm.descent) / 2f, digitP)
+            c.drawRect(r.left, mid - 1.1f * d, r.right, mid + 1.1f * d, seam)
+            c.drawCircle(r.left + 1.5f * d, mid, 2.2f * d, pin)
+            c.drawCircle(r.right - 1.5f * d, mid, 2.2f * d, pin)
+        }
+        tile(text[0]); x += tw + gap
+        tile(text[1]); x += tw + gap
+        val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = GOLD }
+        val cy = top + th / 2f
+        c.drawRoundRect(RectF(x + colonW / 2 - 2.5f * d, cy - th * 0.22f - 2.5f * d, x + colonW / 2 + 2.5f * d, cy - th * 0.22f + 2.5f * d), d, d, dot)
+        c.drawRoundRect(RectF(x + colonW / 2 - 2.5f * d, cy + th * 0.22f - 2.5f * d, x + colonW / 2 + 2.5f * d, cy + th * 0.22f + 2.5f * d), d, d, dot)
+        x += colonW + gap
+        tile(text[2]); x += tw + gap
+        tile(text[3])
+        return top + th + 12f * d
     }
 
     private class Item(val label: String?, val event: Calendars.Event?, val today: Boolean = false)

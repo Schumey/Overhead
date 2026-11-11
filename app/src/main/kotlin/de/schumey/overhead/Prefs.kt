@@ -56,6 +56,11 @@ class Prefs(ctx: Context) {
         get() = Style.of(sp.getString("appStyle", null))
         set(v) = sp.edit().putString("appStyle", v.key).apply()
 
+    /** The dashboard's flight look; POSTER there means the sky shared with the weather. */
+    var dashStyle: Style
+        get() = Style.of(sp.getString("dashStyle", null))
+        set(v) = sp.edit().putString("dashStyle", v.key).apply()
+
     /** The look chosen for one widget instance. */
     fun styleOf(widgetId: Int): Style = Style.of(sp.getString("style_$widgetId", null))
 

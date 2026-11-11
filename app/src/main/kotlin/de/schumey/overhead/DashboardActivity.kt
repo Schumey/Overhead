@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Path
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Bundle
@@ -113,7 +114,7 @@ class DashboardActivity : Activity() {
         thread { draw() }
     }
 
-    /** Renders the three panels from what is stored (no network) and hands them to the view. */
+    /** Renders the board from what is stored (no network) and hands it to the view. */
     private fun draw() {
         val (w, h) = board.size()
         if (w <= 0 || h <= 0) return
@@ -122,41 +123,99 @@ class DashboardActivity : Activity() {
         val d = cx.resources.displayMetrics.density
         val margin = (12 * density).toInt()
         val g = (12 * density).toInt()
-        val inner = w - 2 * margin - 2 * g
-        val wWeather = (inner * 0.30f).toInt()
-        val wCal = (inner * 0.30f).toInt()
-        val wFlights = inner - wWeather - wCal
+        val inner = w - 2 * margin - g
         val ph = h - 2 * margin
         val now = System.currentTimeMillis()
         val snap = Snapshot.fromJson(prefs.snapshotJson)
-        val weather = WeatherView.render(cx, Forecasts.load(prefs), wWeather, ph, now)
-        val flights = Views.render(cx, prefs.appStyle, snap, wFlights, ph, now, loading = snap == null)
-        val cal = CalendarView.render(cx, Calendars.load(this, now), wCal, ph, now)
-        val x1 = margin.toFloat()
-        val x2 = x1 + wWeather + g
-        val x3 = x2 + wFlights + g
+        val weather = Forecasts.load(prefs)
+        val agenda = Calendars.load(this, now)
+        val style = prefs.dashStyle
         val top = margin.toFloat()
-        val panels = listOf(
-            Panel(weather.bitmap, RectF(x1, top, x1 + wWeather, top + ph)),
-            Panel(flights.bitmap, RectF(x2, top, x2 + wFlights, top + ph)),
-            Panel(cal.bitmap, RectF(x3, top, x3 + wCal, top + ph)),
-        )
-        ui.post { board.show(panels, snap?.error == Snapshot.ERR_LOCATION) }
+        val wCal = (inner * 0.30f).toInt()
+        val wMain = inner - wCal
+        val xCal = margin + wMain + g.toFloat()
+        val cal = CalendarView.render(cx, agenda, wCal, ph, now, clock = true)
+        val parts = ArrayList<Part>()
+        val zones = ArrayList<Zone>()
+        val openCalendar = Zone(RectF(xCal, top, xCal + wCal, top + ph)) { openCalendarApp() }
+        parts += Part(cal.bitmap, xCal, top)
+
+        if (style == Style.POSTER) {
+            // One sky for both: the planes fly in the weather's sky, the weather and the flights sit below it.
+            val bodyH = (ph * 0.5f).toInt()
+            val wW = (wMain * 0.42f).toInt()
+            val wF = wMain - wW
+            val flights = Poster.render(cx, snap, wF, bodyH, now, loading = snap == null, sky = false)
+            val wx = WeatherView.render(cx, weather, wW, bodyH, now, sky = false)
+            val skyH = ph - bodyH
+            val panel = Bitmap.createBitmap(wMain, ph, Bitmap.Config.ARGB_8888)
+            val c = Canvas(panel)
+            val r = 26f * d
+            c.clipPath(Path().apply { addRoundRect(0f, 0f, wMain.toFloat(), ph.toFloat(), r, r, Path.Direction.CW) })
+            c.drawColor(Poster.BG)
+            val headerH = 30f * d
+            val cond = WeatherView.conditions(weather) ?: SkyArt.Conditions(cloud = (snap?.cloudCover ?: 40) / 100f, precipMm = snap?.precipMm ?: 0.0)
+            SkyArt.draw(c, weather?.lat ?: snap?.lat, weather?.lon ?: snap?.lon, now, cond, wMain.toFloat(), skyH.toFloat(), d, headerH, bodyScale = 1.25f)
+            val shown = (if (snap?.error == Snapshot.ERR_LOCATION) emptyList() else snap?.flights.orEmpty()).take(flights.rowHex.size)
+            Poster.drawPlanes(c, shown, wMain.toFloat(), skyH.toFloat(), d, headerH)
+            Poster.drawHeader(c, cx, snap, snap == null, now, wMain.toFloat(), 16f * d, headerH, d)
+            c.drawBitmap(wx.bitmap, 0f, skyH.toFloat(), null)
+            c.drawBitmap(flights.bitmap, wW.toFloat(), skyH.toFloat(), null)
+            c.drawRect(wW.toFloat() - d, skyH + 14f * d, wW.toFloat() + d, ph - 14f * d, android.graphics.Paint().apply { color = 0x33F1EEE3 })
+            parts += Part(panel, margin.toFloat(), top)
+            zones += Zone(RectF(margin.toFloat(), top + skyH, margin + wW.toFloat(), top + ph)) { refreshWeather() }
+            zones += Zone(RectF(margin.toFloat(), top, margin + wMain.toFloat(), top + skyH)) { nextLook() }
+            zones += Zone(RectF(margin + wW.toFloat(), top + skyH, margin + wMain.toFloat(), top + ph)) { if (snap?.error == Snapshot.ERR_LOCATION) openSettings() else nextLook() }
+        } else {
+            // weather and one of the other flight looks as separate panels
+            val wW = (wMain * 0.42f).toInt()
+            val wF = wMain - wW - g
+            val wx = WeatherView.render(cx, weather, wW, ph, now)
+            val fl = Views.render(cx, style, snap, wF, ph, now, loading = snap == null)
+            parts += Part(wx.bitmap, margin.toFloat(), top)
+            parts += Part(fl.bitmap, margin + wW + g.toFloat(), top)
+            zones += Zone(RectF(margin.toFloat(), top, margin + wW.toFloat(), top + ph)) { refreshWeather() }
+            zones += Zone(RectF(margin + wW + g.toFloat(), top, margin + wMain.toFloat(), top + ph)) { if (snap?.error == Snapshot.ERR_LOCATION) openSettings() else nextLook() }
+        }
+        zones += openCalendar
+        ui.post { board.show(parts, zones) }
     }
 
-    private class Panel(val bitmap: Bitmap, val rect: RectF)
+    private fun refreshWeather() { lastSlow = 0L; work() }
+
+    private fun openSettings() = startActivity(Intent(this, MainActivity::class.java))
+
+    /** Sky (shared with the weather) -> radar -> board -> runway -> sky ... */
+    private fun nextLook() {
+        prefs.dashStyle = prefs.dashStyle.next()
+        needsFlightsNow = prefs.dashStyle == Style.RUNWAY // the runway look needs airport data
+        thread { draw() }
+        if (needsFlightsNow) work()
+    }
+
+    private fun openCalendarApp() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/${System.currentTimeMillis()}")))
+        } catch (ex: Exception) {
+            // no calendar app
+        }
+    }
+
+    private class Part(val bitmap: Bitmap, val x: Float, val y: Float)
+
+    private class Zone(val rect: RectF, val tap: () -> Unit)
 
     private inner class Board : View(this@DashboardActivity) {
-        private var panels: List<Panel> = emptyList()
-        private var locationMissing = false
+        private var parts: List<Part> = emptyList()
+        private var zones: List<Zone> = emptyList()
 
         init { setBackgroundColor(0xFF0E0D0B.toInt()) }
 
         fun size() = width to height
 
-        fun show(p: List<Panel>, noLocation: Boolean) {
-            panels = p
-            locationMissing = noLocation
+        fun show(p: List<Part>, z: List<Zone>) {
+            parts = p
+            zones = z
             invalidate()
         }
 
@@ -165,29 +224,11 @@ class DashboardActivity : Activity() {
         }
 
         override fun onDraw(canvas: Canvas) {
-            for (p in panels) canvas.drawBitmap(p.bitmap, p.rect.left, p.rect.top, null)
+            for (p in parts) canvas.drawBitmap(p.bitmap, p.x, p.y, null)
         }
 
         override fun onTouchEvent(e: MotionEvent): Boolean {
-            if (e.action == MotionEvent.ACTION_DOWN) return true
-            if (e.action != MotionEvent.ACTION_UP) return true
-            val hit = panels.indexOfFirst { it.rect.contains(e.x, e.y) }
-            when (hit) {
-                0 -> { lastSlow = 0L; work() } // weather: refresh now
-                1 -> if (locationMissing) {
-                    startActivity(Intent(this@DashboardActivity, MainActivity::class.java))
-                } else {
-                    prefs.appStyle = prefs.appStyle.next() // flights: next look
-                    needsFlightsNow = prefs.appStyle == Style.RUNWAY // the runway look needs airport data
-                    thread { draw() }
-                    if (needsFlightsNow) work()
-                }
-                2 -> try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/${System.currentTimeMillis()}")))
-                } catch (ex: Exception) {
-                    // no calendar app
-                }
-            }
+            if (e.action == MotionEvent.ACTION_UP) zones.firstOrNull { it.rect.contains(e.x, e.y) }?.tap?.invoke()
             return true
         }
     }

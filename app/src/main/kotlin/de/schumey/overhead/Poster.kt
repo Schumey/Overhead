@@ -39,14 +39,15 @@ object Poster {
 
     private const val MAX_ROWS = 3
 
-    fun render(ctx: Context, snap: Snapshot?, wPx: Int, hPx: Int, now: Long, loading: Boolean = false): Rendered {
+    /** [sky] false: only the text blocks, from the top (the dashboard draws a sky shared with the weather above them). */
+    fun render(ctx: Context, snap: Snapshot?, wPx: Int, hPx: Int, now: Long, loading: Boolean = false, sky: Boolean = true): Rendered {
         val d = ctx.resources.displayMetrics.density
         fun dp(v: Float) = v * d
         val w = wPx.toFloat()
         val h = hPx.toFloat()
         val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        c.clipPath(Path().apply { addRoundRect(0f, 0f, w, h, dp(26f), dp(26f), Path.Direction.CW) })
+        if (sky) c.clipPath(Path().apply { addRoundRect(0f, 0f, w, h, dp(26f), dp(26f), Path.Direction.CW) })
         c.drawColor(BG)
 
         val pad = dp(16f)
@@ -70,22 +71,24 @@ object Poster {
         if (flights.isNotEmpty()) {
             shown = 1
             blocksH = heroBlockH
-            val minSky = max(dp(86f), h * 0.34f)
+            val minSky = if (sky) max(dp(86f), h * 0.34f) else 0f
             while (shown < min(MAX_ROWS, flights.size) && h - (blocksH + secondaryBlockH + sepH) >= minSky) {
                 blocksH += secondaryBlockH
                 shown++
             }
         }
-        val skyBottom = if (shown == 0) h else h - blocksH - sepH
+        val skyBottom = if (!sky) (if (shown == 0) h else 0f) else if (shown == 0) h else h - blocksH - sepH
 
         // ---- sky ----
-        SkyArt.draw(c, snap?.lat, snap?.lon, now, SkyArt.Conditions(cloud = (snap?.cloudCover ?: 40) / 100f, precipMm = snap?.precipMm ?: 0.0), w, skyBottom, d, headerH)
         val scene = flights.take(shown)
-        drawPlanes(c, scene, w, skyBottom, d, headerH)
+        if (sky) {
+            SkyArt.draw(c, snap?.lat, snap?.lon, now, SkyArt.Conditions(cloud = (snap?.cloudCover ?: 40) / 100f, precipMm = snap?.precipMm ?: 0.0), w, skyBottom, d, headerH)
+            drawPlanes(c, scene, w, skyBottom, d, headerH)
+        }
         if (shown == 0) drawMessage(c, ctx, snap, loading, w, skyBottom, pad, d)
 
         // ---- header ----
-        drawHeader(c, ctx, snap, loading, now, w, pad, headerH, d)
+        if (sky) drawHeader(c, ctx, snap, loading, now, w, pad, headerH, d)
 
         // ---- text rows ----
         val rows = ArrayList<IntArray>()
@@ -209,7 +212,7 @@ object Poster {
         return "$t…"
     }
 
-    private fun drawHeader(c: Canvas, ctx: Context, snap: Snapshot?, loading: Boolean, now: Long, w: Float, pad: Float, headerH: Float, d: Float) {
+    internal fun drawHeader(c: Canvas, ctx: Context, snap: Snapshot?, loading: Boolean, now: Long, w: Float, pad: Float, headerH: Float, d: Float) {
         val scrim = Paint().apply {
             shader = LinearGradient(0f, 0f, 0f, headerH * 1.4f, 0xA021201C.toInt(), 0x0021201C, Shader.TileMode.CLAMP)
         }
@@ -244,7 +247,7 @@ object Poster {
 
     // ------------------------------------------------------------------ planes
 
-    private fun drawPlanes(c: Canvas, scene: List<Flight>, w: Float, skyH: Float, d: Float, headerH: Float) {
+    internal fun drawPlanes(c: Canvas, scene: List<Flight>, w: Float, skyH: Float, d: Float, headerH: Float) {
         if (scene.isEmpty()) return
         val labelH = 16f * d
         val pad = 10f * d

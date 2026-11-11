@@ -24,14 +24,15 @@ object WeatherView {
     private const val MAX_DAYS = 5
 
     /** [roundBottom] false: the bottom corners are square, for a picture that continues below (the combined widget). */
-    fun render(ctx: Context, state: WeatherState?, wPx: Int, hPx: Int, now: Long, loading: Boolean = false, roundBottom: Boolean = true): Rendered {
+    /** [sky] false: only the text blocks, from the top (the dashboard draws a sky shared with the flights above them). */
+    fun render(ctx: Context, state: WeatherState?, wPx: Int, hPx: Int, now: Long, loading: Boolean = false, roundBottom: Boolean = true, sky: Boolean = true): Rendered {
         val d = ctx.resources.displayMetrics.density
         fun dp(v: Float) = v * d
         val w = wPx.toFloat()
         val h = hPx.toFloat()
         val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        val r = dp(26f)
+        val r = if (sky) dp(26f) else 0f
         val rb = if (roundBottom) r else 0f
         c.clipPath(Path().apply { addRoundRect(0f, 0f, w, h, floatArrayOf(r, r, r, r, rb, rb, rb, rb), Path.Direction.CW) })
         c.drawColor(Poster.BG)
@@ -46,7 +47,7 @@ object WeatherView {
         val rowH = dp(24f)
         val gap = dp(3f)
         val sepH = dp(8f)
-        val minSky = max(dp(84f), h * 0.30f)
+        val minSky = if (sky) max(dp(84f), h * 0.30f) else 0f
         var blocks = 0f
         var hourlyShown = false
         var daysShown = 0
@@ -60,18 +61,14 @@ object WeatherView {
             if (daysShown > 0) blocks += dp(6f) + daysShown * (rowH + gap)
             blocks += dp(6f) // some air above the rounded bottom corners
         }
-        val skyBottom = if (fc == null) h else h - blocks
+        val skyBottom = if (fc == null) h else if (!sky) 0f else h - blocks
 
         // ---- sky ----
         val kind = fc?.let { WeatherKind.of(it.code) }
-        val cond = if (fc == null || kind == null) SkyArt.Conditions() else SkyArt.Conditions(
-            cloud = fc.cloud / 100f,
-            // the current precipitation figure lags behind the weather code, so a wet code always shows at least some rain
-            precipMm = if (kind.isWet && fc.precipMm < 0.3) 0.3 else fc.precipMm,
-            snow = kind.isSnowy, fog = kind == WeatherKind.FOG, thunder = kind == WeatherKind.THUNDER,
-        )
-        SkyArt.draw(c, state?.lat, state?.lon, now, cond, w, skyBottom, d, headerH, bodyScale = 1.25f)
-        drawHeader(c, ctx, state, loading, now, w, pad, d)
+        if (sky) {
+            SkyArt.draw(c, state?.lat, state?.lon, now, conditions(state) ?: SkyArt.Conditions(), w, skyBottom, d, headerH, bodyScale = 1.25f)
+            drawHeader(c, ctx, state, loading, now, w, pad, d)
+        }
         if (fc == null || kind == null) {
             drawMessage(c, ctx, state, loading, w, skyBottom, pad, d)
             return Rendered(bmp, hPx, emptyList(), emptyList(), ctx.getString(R.string.widget_weather_title))
@@ -127,6 +124,19 @@ object WeatherView {
 
         val desc = "$tempText ${ctx.getString(kind.labelRes)}" + (state?.place?.let { " · $it" } ?: "")
         return Rendered(bmp, hPx, emptyList(), emptyList(), desc)
+    }
+
+    /** How the sky looks for this weather; null without a forecast. */
+    fun conditions(state: WeatherState?): SkyArt.Conditions? {
+        if (state?.error == Snapshot.ERR_LOCATION) return null
+        val fc = state?.forecast ?: return null
+        val kind = WeatherKind.of(fc.code)
+        return SkyArt.Conditions(
+            cloud = fc.cloud / 100f,
+            // the current precipitation figure lags behind the weather code, so a wet code always shows at least some rain
+            precipMm = if (kind.isWet && fc.precipMm < 0.3) 0.3 else fc.precipMm,
+            snow = kind.isSnowy, fog = kind == WeatherKind.FOG, thunder = kind == WeatherKind.THUNDER,
+        )
     }
 
     // ------------------------------------------------------------------ pieces
