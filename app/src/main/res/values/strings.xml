@@ -38,6 +38,50 @@
         <item quantity="other">%d Flugzeuge</item>
     </plurals>
 
+    <string name="style_poster">Poster</string>
+    <string name="style_radar">Radar</string>
+    <string name="style_board">Anzeigetafel</string>
+    <string name="style_runway">Startbahn</string>
+    <string name="widget_config_title">Ansicht wählen</string>
+    <string name="widget_config_hint">Du kannst sie später ändern: im Widget oben links tippen wechselt die Ansicht.</string>
+
+    <string name="radar_title">RADAR · %s</string>
+    <string name="radar_title_unknown">RADAR</string>
+    <string name="radar_none">Keine Kontakte im Umkreis</string>
+    <string name="radar_summary">%1$d Kontakte · nächster: %2$s in %3$s</string>
+
+    <string name="board_title">ÜBERFLÜGE</string>
+    <string name="board_col_flight">FLUG</string>
+    <string name="board_col_type">TYP</string>
+    <string name="board_col_from">VON</string>
+    <string name="board_col_to">NACH</string>
+    <string name="board_col_alt">HÖHE M</string>
+    <string name="board_col_km">KM</string>
+
+    <string name="runway_title">STARTBAHN · %s</string>
+    <string name="runway_title_unknown">STARTBAHN</string>
+    <string name="runway_no_airport">Kein Flughafen in der Nähe</string>
+    <string name="runway_free">BAHN FREI</string>
+    <string name="runway_busy">BAHN BELEGT</string>
+    <string name="runway_ref">BAHN %s</string>
+    <string name="runway_taxiway">ROLLWEG</string>
+    <string name="runway_quiet">Gerade nichts los auf dem Platz</string>
+    <string name="runway_summary">%1$s · %2$s entfernt · %3$d vor dem Start, %4$d gerade weg</string>
+    <string name="legend_takeoff">Startlauf</string>
+    <string name="legend_taxi">rollt</string>
+    <string name="legend_departed">gestartet</string>
+    <string name="legend_landed">gelandet</string>
+    <string name="status_stand">STEHT</string>
+    <string name="status_taxi">ROLLT</string>
+    <string name="status_takeoff">STARTLAUF</string>
+    <string name="status_landed">GELANDET</string>
+    <string name="status_departed">GESTARTET</string>
+    <string name="where_air">in der Luft</string>
+    <string name="where_runway">auf der Bahn</string>
+    <string name="where_stand">am Standplatz</string>
+    <string name="where_taxiway">auf dem Rollweg</string>
+    <string name="from_field">%s vom Platz</string>
+
     <string name="refresh">Aktualisieren</string>
     <string name="settings">Einstellungen</string>
     <string name="use_gps">GPS-Standort verwenden</string>

@@ -38,6 +38,50 @@
         <item quantity="other">%d aircraft</item>
     </plurals>
 
+    <string name="style_poster">Poster</string>
+    <string name="style_radar">Radar</string>
+    <string name="style_board">Board</string>
+    <string name="style_runway">Runway</string>
+    <string name="widget_config_title">Choose a look</string>
+    <string name="widget_config_hint">You can change it later: tap the top left of the widget to switch.</string>
+
+    <string name="radar_title">RADAR · %s</string>
+    <string name="radar_title_unknown">RADAR</string>
+    <string name="radar_none">No contacts in range</string>
+    <string name="radar_summary">%1$d contacts · nearest: %2$s at %3$s</string>
+
+    <string name="board_title">OVERHEAD</string>
+    <string name="board_col_flight">FLIGHT</string>
+    <string name="board_col_type">TYPE</string>
+    <string name="board_col_from">FROM</string>
+    <string name="board_col_to">TO</string>
+    <string name="board_col_alt">ALT M</string>
+    <string name="board_col_km">KM</string>
+
+    <string name="runway_title">RUNWAY · %s</string>
+    <string name="runway_title_unknown">RUNWAY</string>
+    <string name="runway_no_airport">No airport nearby</string>
+    <string name="runway_free">RUNWAY CLEAR</string>
+    <string name="runway_busy">RUNWAY IN USE</string>
+    <string name="runway_ref">RWY %s</string>
+    <string name="runway_taxiway">TAXIWAY</string>
+    <string name="runway_quiet">Nothing going on at the field right now</string>
+    <string name="runway_summary">%1$s · %2$s away · %3$d before takeoff, %4$d just departed</string>
+    <string name="legend_takeoff">takeoff roll</string>
+    <string name="legend_taxi">taxiing</string>
+    <string name="legend_departed">departed</string>
+    <string name="legend_landed">landed</string>
+    <string name="status_stand">STANDING</string>
+    <string name="status_taxi">TAXIING</string>
+    <string name="status_takeoff">TAKEOFF</string>
+    <string name="status_landed">LANDED</string>
+    <string name="status_departed">DEPARTED</string>
+    <string name="where_air">airborne</string>
+    <string name="where_runway">on the runway</string>
+    <string name="where_stand">at the stand</string>
+    <string name="where_taxiway">on the taxiway</string>
+    <string name="from_field">%s from the field</string>
+
     <string name="refresh">Refresh</string>
     <string name="settings">Settings</string>
     <string name="use_gps">Use GPS location</string>

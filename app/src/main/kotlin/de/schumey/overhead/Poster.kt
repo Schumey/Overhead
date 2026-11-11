@@ -27,27 +27,19 @@ import kotlin.math.sqrt
  * points at the nearest aircraft. Rendered into one bitmap because RemoteViews cannot draw this.
  */
 object Poster {
-    class Result(
-        val bitmap: Bitmap,
-        /** Bottom edge of the sky strip in pixels. */
-        val skyBottomPx: Int,
-        /** Top and bottom pixel of every text row, for tap zones. */
-        val rows: List<IntArray>,
-        val description: String,
-    )
+    // Shared with the other views (radar, board, runway) so all of them speak the same visual language.
+    internal const val BG = 0xFF21201C.toInt()
+    internal const val CREAM = 0xFFF1EEE3.toInt()
+    internal const val MUTED = 0xFF9A978D.toInt()
+    internal const val RED = 0xFFD3162F.toInt()
 
-    private const val BG = 0xFF21201C.toInt()
-    private const val CREAM = 0xFFF1EEE3.toInt()
-    private const val MUTED = 0xFF9A978D.toInt()
-    private const val RED = 0xFFD3162F.toInt()
-
-    private val mono: Typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
-    private val monoBold: Typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-    private val heavy: Typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
+    internal val mono: Typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+    internal val monoBold: Typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+    internal val heavy: Typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
 
     private const val MAX_ROWS = 3
 
-    fun render(ctx: Context, snap: Snapshot?, wPx: Int, hPx: Int, now: Long, loading: Boolean = false): Result {
+    fun render(ctx: Context, snap: Snapshot?, wPx: Int, hPx: Int, now: Long, loading: Boolean = false): Rendered {
         val d = ctx.resources.displayMetrics.density
         fun dp(v: Float) = v * d
         val w = wPx.toFloat()
@@ -138,7 +130,7 @@ object Poster {
             val t = rowText(ctx, f, now, hero = false)
             t.title + ", " + t.tokens.joinToString(", ") { it.text }
         }
-        return Result(bmp, skyBottom.roundToInt(), rows, desc)
+        return Rendered(bmp, skyBottom.roundToInt(), rows, scene.map { it.hex }, desc)
     }
 
     // ------------------------------------------------------------------ text
@@ -195,12 +187,20 @@ object Poster {
         return keep.joinToString(" · ") { it.text }
     }
 
-    private fun textPaint(tf: Typeface, size: Float, color: Int = CREAM) = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+    internal fun textPaint(tf: Typeface, size: Float, color: Int = CREAM) = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = tf; textSize = size; this.color = color
     }
 
+    /** "LIVE · 23:52" while the data is fresh, "STAND 23:40" when it is old or failed. */
+    internal fun liveText(ctx: Context, snap: Snapshot?, loading: Boolean, now: Long): String = when {
+        loading -> ctx.getString(R.string.poster_loading)
+        snap == null -> ""
+        snap.error == null && now - snap.time < 10 * 60_000 -> ctx.getString(R.string.poster_live, Fmt.time(snap.time))
+        else -> ctx.getString(R.string.poster_stale, Fmt.time(snap.time))
+    }
+
     /** Shrinks the paint's text size until [text] fits, then cuts with an ellipsis if even the smallest size is too wide. */
-    private fun fitLine(p: TextPaint, text: String, maxW: Float, size: Float, minSize: Float): String {
+    internal fun fitLine(p: TextPaint, text: String, maxW: Float, size: Float, minSize: Float): String {
         p.textSize = size
         while (p.measureText(text) > maxW && p.textSize > minSize) p.textSize -= 0.5f
         if (p.measureText(text) <= maxW) return text
@@ -218,16 +218,12 @@ object Poster {
         val p = textPaint(mono, 9.5f * d).apply { letterSpacing = 0.16f }
         val place = snap?.place?.uppercase(Locale.getDefault())
         val left = if (place.isNullOrEmpty()) ctx.getString(R.string.poster_title_unknown) else ctx.getString(R.string.poster_title, place)
-        val right = when {
-            loading -> ctx.getString(R.string.poster_loading)
-            snap == null -> ""
-            snap.error == null && now - snap.time < 10 * 60_000 -> ctx.getString(R.string.poster_live, Fmt.time(snap.time))
-            else -> ctx.getString(R.string.poster_stale, Fmt.time(snap.time))
-        }
+        val right = liveText(ctx, snap, loading, now)
         val base = 20f * d
         val rightW = p.measureText(right)
-        c.drawText(right, w - pad - rightW, base, p)
-        c.drawText(fitLine(p, left, w - pad * 2 - rightW - 16f * d, p.textSize, 7f * d), pad, base, p)
+        val leftFit = fitLine(p, left, w - pad * 2 - rightW - 16f * d, p.textSize, 7f * d)
+        c.drawText(leftFit, pad, base, p)
+        c.drawText(right, w - pad - p.measureText(right), base, p) // same size as the left text, which may have shrunk
     }
 
     private fun drawMessage(c: Canvas, ctx: Context, snap: Snapshot?, loading: Boolean, w: Float, skyH: Float, pad: Float, d: Float) {
@@ -248,7 +244,7 @@ object Poster {
 
     // ------------------------------------------------------------------ sky
 
-    private fun lerp(a: Int, b: Int, t: Float): Int {
+    internal fun lerp(a: Int, b: Int, t: Float): Int {
         fun ch(shift: Int) = (((a shr shift) and 0xFF) + ((((b shr shift) and 0xFF) - ((a shr shift) and 0xFF)) * t)).roundToInt()
         return (ch(24) shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }

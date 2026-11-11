@@ -41,6 +41,23 @@ class Prefs(ctx: Context) {
         get() = sp.getString("routes2", null)
         set(v) = sp.edit().putString("routes2", v).apply()
 
+    /** Last airport lookup: {"t":time,"k":"lat,lon" (0.1 degree grid),"a":airport or absent if none was found}. */
+    var airportJson: String?
+        get() = sp.getString("airport", null)
+        set(v) = sp.edit().putString("airport", v).apply()
+
+    /** The look shown on the app's start screen. */
+    var appStyle: Style
+        get() = Style.of(sp.getString("appStyle", null))
+        set(v) = sp.edit().putString("appStyle", v.key).apply()
+
+    /** The look chosen for one widget instance. */
+    fun styleOf(widgetId: Int): Style = Style.of(sp.getString("style_$widgetId", null))
+
+    fun setStyle(widgetId: Int, style: Style) = sp.edit().putString("style_$widgetId", style.key).apply()
+
+    fun forgetWidget(widgetId: Int) = sp.edit().remove("style_$widgetId").apply()
+
     /** Last weather lookup: {"t":time,"k":"lat,lon","c":cloud,"p":precip}. */
     var weatherJson: String?
         get() = sp.getString("weather", null)

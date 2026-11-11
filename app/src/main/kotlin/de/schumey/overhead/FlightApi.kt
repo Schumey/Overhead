@@ -96,11 +96,11 @@ object FlightApi {
         )
     }
 
-    internal fun get(url: String, allow404: Boolean = false): Pair<Int, String> {
+    internal fun get(url: String, allow404: Boolean = false, readTimeoutMs: Int = 7_000): Pair<Int, String> {
         val c = URL(url).openConnection() as HttpURLConnection
         try {
             c.connectTimeout = 5_000
-            c.readTimeout = 7_000
+            c.readTimeout = readTimeoutMs
             c.setRequestProperty("User-Agent", "Overhead-Android/0.1")
             c.setRequestProperty("Accept", "application/json")
             val code = c.responseCode

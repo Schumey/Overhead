@@ -21,7 +21,7 @@ import java.io.FileOutputStream
 import kotlin.concurrent.thread
 
 /**
- * Home-screen widget: the poster (see [Poster]) with the aircraft closest to the observer.
+ * Home-screen widget. What it looks like (poster, radar, board, runway) is chosen per widget instance, see [Style].
  *
  * Refresh: a self-rescheduling non-wakeup alarm (interval from the settings). It never wakes the phone, and it
  * skips the network while the screen is off; when the screen comes on, an overdue alarm fires right away.
@@ -38,10 +38,32 @@ class FlightWidget : AppWidgetProvider() {
                     try {
                         val interactive = ctx.getSystemService(PowerManager::class.java)?.isInteractive != false
                         if (userTap) renderAll(ctx, loading = true)
-                        if (interactive || userTap) Refresher.refresh(ctx, force = userTap)
+                        // onPartial: the first save (flights) is shown while a slow extra (airport lookup) is still running.
+                        if (interactive || userTap) Refresher.refresh(ctx, force = userTap, onPartial = { renderAll(ctx) })
                         renderAll(ctx)
                     } catch (e: Exception) {
                         // A failed refresh must not crash the receiver; the next alarm tries again.
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }
+            ACTION_CYCLE -> {
+                val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+                if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
+                val prefs = Prefs(ctx)
+                prefs.setStyle(id, prefs.styleOf(id).next())
+                renderAll(ctx)
+                // The runway view needs airport data the other views do not fetch: get it now rather than at the next alarm.
+                val pending = goAsync()
+                thread {
+                    try {
+                        if (prefs.styleOf(id) == Style.RUNWAY && Snapshot.fromJson(prefs.snapshotJson)?.airport == null) {
+                            Refresher.refresh(ctx, force = true, onPartial = { renderAll(ctx) })
+                            renderAll(ctx)
+                        }
+                    } catch (e: Exception) {
+                        // shown on the next refresh
                     } finally {
                         pending.finish()
                     }
@@ -56,13 +78,19 @@ class FlightWidget : AppWidgetProvider() {
 
     override fun onDisabled(ctx: Context) = cancelAlarm(ctx)
 
+    override fun onDeleted(ctx: Context, appWidgetIds: IntArray) {
+        val prefs = Prefs(ctx)
+        appWidgetIds.forEach { prefs.forgetWidget(it) }
+    }
+
     override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, newOptions: android.os.Bundle) {
         renderAll(ctx)
     }
 
     /**
-     * Development helper (debuggable builds only): writes the poster for the stored snapshot to files/<name>.png, so the
-     * design can be checked without a visible screen. Extras: w, h (dp), t (epoch millis, to try other times of day), name.
+     * Development helper (debuggable builds only): writes the view for the stored snapshot to files/<name>.png, so the
+     * design can be checked without a visible screen. Extras: w, h (dp), t (epoch millis, to try other times of day),
+     * name, style (poster, radar, board, runway; also becomes the app's current look so a refresh fetches what it needs).
      */
     private fun dump(ctx: Context, intent: Intent) {
         if (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
@@ -71,13 +99,15 @@ class FlightWidget : AppWidgetProvider() {
         val h = (intent.getIntExtra("h", 200) * d).toInt()
         val t = intent.getLongExtra("t", System.currentTimeMillis())
         val name = intent.getStringExtra("name") ?: "poster"
+        val style = Style.of(intent.getStringExtra("style"))
+        Prefs(ctx).appStyle = style
         val snap = Snapshot.fromJson(Prefs(ctx).snapshotJson)
         fun save(bmp: Bitmap, file: String) =
             FileOutputStream(File(ctx.filesDir, file)).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        save(Poster.render(ctx, snap, w, h, t).bitmap, "$name.png")
+        save(Views.render(ctx, style, snap, w, h, t).bitmap, "$name.png")
 
-        // Also assemble the real RemoteViews (poster + tap zones) the way the launcher does, to prove it inflates and applies.
-        val view = build(ctx, snap, false, w, h).apply(ctx, android.widget.FrameLayout(ctx))
+        // Also assemble the real RemoteViews (picture + tap zones) the way the launcher does, to prove it inflates and applies.
+        val view = build(ctx, AppWidgetManager.INVALID_APPWIDGET_ID, style, snap, false, w, h).apply(ctx, android.widget.FrameLayout(ctx))
         view.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
         view.layout(0, 0, w, h)
         val composed = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -88,7 +118,13 @@ class FlightWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_REFRESH = "de.schumey.overhead.REFRESH"
         const val ACTION_TICK = "de.schumey.overhead.TICK"
+        const val ACTION_CYCLE = "de.schumey.overhead.CYCLE"
         const val ACTION_DUMP = "de.schumey.overhead.DUMP"
+
+        private val ZONES = intArrayOf(
+            R.id.zone_1, R.id.zone_2, R.id.zone_3, R.id.zone_4, R.id.zone_5,
+            R.id.zone_6, R.id.zone_7, R.id.zone_8, R.id.zone_9, R.id.zone_10,
+        )
 
         /** Asks the widget to refresh now (used by the app after a settings change). */
         fun refreshNow(ctx: Context) {
@@ -122,10 +158,11 @@ class FlightWidget : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, FlightWidget::class.java))
             if (ids.isEmpty()) return
-            val snapshot = Snapshot.fromJson(Prefs(ctx).snapshotJson)
+            val prefs = Prefs(ctx)
+            val snapshot = Snapshot.fromJson(prefs.snapshotJson)
             for (id in ids) {
                 val (w, h) = sizePx(ctx, mgr, id)
-                mgr.updateAppWidget(id, build(ctx, snapshot, loading, w, h))
+                mgr.updateAppWidget(id, build(ctx, id, prefs.styleOf(id), snapshot, loading, w, h))
             }
         }
 
@@ -140,11 +177,11 @@ class FlightWidget : AppWidgetProvider() {
             return (wDp * d).toInt() to (hDp * d).toInt()
         }
 
-        private fun build(ctx: Context, snap: Snapshot?, loading: Boolean, w: Int, h: Int): RemoteViews {
+        private fun build(ctx: Context, id: Int, style: Style, snap: Snapshot?, loading: Boolean, w: Int, h: Int): RemoteViews {
             val rv = RemoteViews(ctx.packageName, R.layout.widget)
-            val poster = Poster.render(ctx, snap, w, h, System.currentTimeMillis(), loading)
-            rv.setImageViewBitmap(R.id.poster, poster.bitmap)
-            rv.setContentDescription(R.id.poster, poster.description.ifEmpty { ctx.getString(R.string.widget_title) })
+            val view = Views.render(ctx, style, snap, w, h, System.currentTimeMillis(), loading)
+            rv.setImageViewBitmap(R.id.poster, view.bitmap)
+            rv.setContentDescription(R.id.poster, view.description.ifEmpty { ctx.getString(R.string.widget_title) })
             rv.setViewVisibility(R.id.tv_message, View.GONE)
 
             val immutable = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -152,23 +189,30 @@ class FlightWidget : AppWidgetProvider() {
             rv.setOnClickPendingIntent(R.id.zone_refresh, PendingIntent.getBroadcast(
                 ctx, 2, Intent(ctx, FlightWidget::class.java).setAction(ACTION_REFRESH), immutable,
             ))
+            // Top left: switch to the next look. One PendingIntent per widget, so several widgets keep their own choice.
+            rv.setOnClickPendingIntent(R.id.zone_cycle, PendingIntent.getBroadcast(
+                ctx, 1000 + id,
+                Intent(ctx, FlightWidget::class.java).setAction(ACTION_CYCLE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id),
+                immutable,
+            ))
 
-            // Tap zones: the sky opens the app, each text row opens that aircraft on a live map.
+            // Tap zones: the picture opens the app, each row opens that aircraft on a live map.
             val px = TypedValue.COMPLEX_UNIT_PX
-            rv.setViewLayoutHeight(R.id.zone_sky, (poster.rows.firstOrNull()?.get(0) ?: h).toFloat(), px)
+            rv.setViewLayoutHeight(R.id.zone_sky, (view.rows.firstOrNull()?.get(0) ?: h).toFloat(), px)
             rv.setOnClickPendingIntent(R.id.zone_sky, openApp)
-            val zones = intArrayOf(R.id.zone_1, R.id.zone_2, R.id.zone_3)
-            zones.forEachIndexed { i, zone ->
-                val row = poster.rows.getOrNull(i)
-                val flight = snap?.flights?.getOrNull(i)
-                if (row == null || flight == null) {
+            ZONES.forEachIndexed { i, zone ->
+                val row = view.rows.getOrNull(i)
+                val hex = view.rowHex.getOrNull(i)
+                if (row == null || hex == null) {
                     rv.setViewVisibility(zone, View.GONE)
                 } else {
                     rv.setViewVisibility(zone, View.VISIBLE)
-                    rv.setViewLayoutHeight(zone, (row[1] - row[0]).toFloat(), px)
+                    // Rows are stacked back to back; the gap between two rows belongs to the lower one so nothing is dead.
+                    val top = if (i == 0) row[0] else view.rows[i - 1][1]
+                    rv.setViewLayoutHeight(zone, (row[1] - top).toFloat(), px)
                     rv.setOnClickPendingIntent(zone, PendingIntent.getActivity(
                         ctx, 100 + i,
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://globe.adsbexchange.com/?icao=${flight.hex.lowercase()}")),
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://globe.adsbexchange.com/?icao=${hex.lowercase()}")),
                         immutable,
                     ))
                 }

@@ -137,6 +137,78 @@ class LogicTest {
         assertNotNull(Eta.estimate(Eta.orient(east), 0L))
     }
 
+    // A made-up airport on the equator-ish grid: one east-west runway of about 7 km through the reference point.
+    private val here = AirportInfo(
+        "EDXX", "XXX", "Testfield", 50.0, 8.55,
+        listOf(Runway("07/25", 50.0, 8.50, 50.0, 8.60)),
+    )
+
+    private fun onField(lat: Double, lon: Double, ground: Boolean, kmh: Int, alt: Int? = null, rate: Int? = 0, origin: String? = null, dest: String? = null): Flight {
+        val route = if (origin != null || dest != null) {
+            RouteInfo(null, origin?.let { Airport(it, it, 0.0, 0.0) }, dest?.let { Airport(it, it, 0.0, 0.0) })
+        } else null
+        return flight(lat, lon, 90.0, kmh, null, ground).copy(altitudeM = alt, vertRateFpm = rate, route = route)
+    }
+
+    @Test
+    fun classifiesTrafficOnTheField() {
+        val takeoff = onField(50.0, 8.55, true, 150, origin = "XXX", dest = "YYY") // on the runway, fast, leaving from here
+        val landed = onField(50.0, 8.57, true, 120, origin = "YYY", dest = "XXX") // on the runway, fast, arriving here
+        val taxi = onField(50.01, 8.53, true, 25) // off the runway, rolling
+        val stand = onField(50.012, 8.54, true, 0) // parked
+        val departed = onField(50.0, 8.62, false, 330, alt = 400, rate = 1800, origin = "XXX") // just lifted off
+        val overflight = onField(50.0, 8.55, false, 800, alt = 10000, rate = 0) // far above: not part of the picture
+        val result = Airfield.classify(here, listOf(stand, taxi, takeoff, overflight, departed, landed))
+
+        assertEquals(5, result.size)
+        val byStatus = result.associate { it.flight to it.status }
+        assertEquals(FieldStatus.TAKEOFF, byStatus[takeoff])
+        assertEquals(FieldStatus.LANDED, byStatus[landed])
+        assertEquals(FieldStatus.TAXI, byStatus[taxi])
+        assertEquals(FieldStatus.STAND, byStatus[stand])
+        assertEquals(FieldStatus.DEPARTED, byStatus[departed])
+        // Priority order: takeoff first, parked last.
+        assertEquals(FieldStatus.TAKEOFF, result.first().status)
+        assertEquals(FieldStatus.STAND, result.last().status)
+        // Runway position: the middle of the runway is about halfway along.
+        assertEquals(0.5, result.first { it.status == FieldStatus.TAKEOFF }.along, 0.05)
+        assertEquals(-1, result.first { it.status == FieldStatus.TAXI }.runway)
+        assertEquals(1, Airfield.beforeTakeoff(here, result)) // only the one leaving from here
+        assertEquals(1, Airfield.justDeparted(result))
+    }
+
+    @Test
+    fun parsesAirportsFromOpenStreetMap() {
+        val aerodromes = """
+            {"elements":[
+              {"type":"node","lat":50.2,"lon":8.7,"tags":{"icao":"EDFE","name":"Flugplatz Egelsbach"}},
+              {"type":"way","center":{"lat":50.033,"lon":8.570},"tags":{"icao":"EDDF","iata":"FRA","name":"Frankfurt Airport","name:de":"Flughafen Frankfurt Main"}},
+              {"type":"node","lat":50.5,"lon":8.0,"tags":{"name":"no code, ignored"}}
+            ]}
+        """.trimIndent()
+        val a = Airports.parseAerodromes(aerodromes, 50.1, 8.6)!!
+        assertEquals("EDDF", a.icao) // the one with scheduled service wins over the nearer airstrip
+        assertEquals("FRA", a.iata)
+        assertEquals("Flughafen Frankfurt Main", a.name)
+        // Only an airstrip: used when it is close, ignored when far.
+        val strip = """{"elements":[{"type":"node","lat":50.2,"lon":8.7,"tags":{"icao":"EDFE"}}]}"""
+        assertEquals("EDFE", Airports.parseAerodromes(strip, 50.19, 8.69)!!.icao)
+        assertNull(Airports.parseAerodromes(strip, 51.5, 9.5))
+
+        val runways = Airports.parseRunways("""
+            {"elements":[{"type":"way","tags":{"ref":"07C/25C"},"geometry":[{"lat":50.03,"lon":8.53},{"lat":50.03,"lon":8.55},{"lat":50.04,"lon":8.60}]}]}
+        """.trimIndent())
+        assertEquals(1, runways.size)
+        assertEquals("07C/25C", runways[0].ref)
+        assertEquals(8.60, runways[0].lon2, 0.0001)
+    }
+
+    @Test
+    fun snapshotKeepsAirportData() {
+        val s = Snapshot(1L, 50.0, 8.5, 25, emptyList(), null, airport = here, airportTraffic = listOf(onField(50.0, 8.55, true, 150)))
+        assertEquals(s, Snapshot.fromJson(s.toJson()))
+    }
+
     @Test
     fun sunAndMoon() {
         fun ms(iso: String) = java.time.Instant.parse(iso).toEpochMilli()

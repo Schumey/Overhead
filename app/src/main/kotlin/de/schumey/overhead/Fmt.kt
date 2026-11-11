@@ -42,6 +42,14 @@ object Fmt {
         return FlightText(title, distance, route, eta, details)
     }
 
+    /** Altitude with an apostrophe as thousands separator, as in the designs: 10'378. */
+    fun thousands(n: Int): String = String.format(Locale.US, "%,d", n).replace(',', '\'')
+
+    /** Flight identifier as passengers know it (AF274), falling back to the radio callsign. */
+    fun flightNo(f: Flight): String = f.route?.flightNo ?: f.callsign
+
+    fun km1(km: Double): String = String.format(Locale.getDefault(), "%.1f", km)
+
     fun distance(km: Double): String =
         if (km < 10) String.format(Locale.getDefault(), "%.1f km", km)
         else String.format(Locale.getDefault(), "%d km", Math.round(km))

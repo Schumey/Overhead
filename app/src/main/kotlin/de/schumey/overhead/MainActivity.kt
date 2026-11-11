@@ -13,6 +13,7 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -25,6 +26,7 @@ import kotlin.concurrent.thread
 /** Shows the same data as the widget in full, and holds the settings. */
 class MainActivity : Activity() {
     private lateinit var prefs: Prefs
+    private val chips = LinkedHashMap<Style, TextView>()
     private lateinit var poster: ImageView
     private lateinit var status: TextView
     private lateinit var list: LinearLayout
@@ -77,7 +79,14 @@ class MainActivity : Activity() {
         busy = true
         status.text = getString(R.string.loading)
         thread {
-            val snap = try { Refresher.refresh(this, force = true) } catch (e: Exception) { null }
+            val snap = try {
+                Refresher.refresh(this, force = true, onPartial = {
+                    FlightWidget.renderAll(this)
+                    runOnUiThread { if (!isDestroyed) showSnapshot(Snapshot.fromJson(prefs.snapshotJson)) }
+                })
+            } catch (e: Exception) {
+                null
+            }
             FlightWidget.renderAll(this)
             runOnUiThread {
                 busy = false
@@ -89,7 +98,8 @@ class MainActivity : Activity() {
     private fun showSnapshot(s: Snapshot?) {
         list.removeAllViews()
         val wPx = resources.displayMetrics.widthPixels - dp(32)
-        val rendered = Poster.render(this, s, wPx, (wPx * 0.85f).toInt(), System.currentTimeMillis(), loading = s == null)
+        val style = prefs.appStyle
+        val rendered = Views.render(this, style, s, wPx, (wPx * style.aspect).toInt(), System.currentTimeMillis(), loading = s == null)
         poster.setImageBitmap(rendered.bitmap)
         poster.contentDescription = rendered.description.ifEmpty { getString(R.string.widget_title) }
         if (s == null) {
@@ -136,6 +146,31 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(8), dp(16), dp(24))
         }
+        root.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                Style.entries.forEach { st ->
+                    val chip = TextView(this@MainActivity).apply {
+                        setText(st.titleRes)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                        setPadding(dp(14), dp(7), dp(14), dp(7))
+                        layoutParams = LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) }
+                        setOnClickListener {
+                            prefs.appStyle = st
+                            updateChips()
+                            val snap = Snapshot.fromJson(prefs.snapshotJson)
+                            showSnapshot(snap)
+                            // The runway view needs airport data that the other looks do not fetch.
+                            if (st == Style.RUNWAY && snap?.airport == null) refresh()
+                        }
+                    }
+                    chips[st] = chip
+                    addView(chip)
+                }
+            })
+        })
+        updateChips()
         poster = ImageView(this).apply {
             adjustViewBounds = true
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(8) }
@@ -202,6 +237,17 @@ class MainActivity : Activity() {
 
         root.addView(text(getString(R.string.sources), 12f, color = R.color.text_secondary).apply { setPadding(0, dp(28), 0, 0) })
         return ScrollView(this).apply { addView(root) }
+    }
+
+    private fun updateChips() {
+        for ((st, chip) in chips) {
+            val selected = st == prefs.appStyle
+            chip.background = GradientDrawable().apply {
+                cornerRadius = dp(20).toFloat()
+                if (selected) setColor(getColor(R.color.text_primary)) else setStroke(dp(1), getColor(R.color.text_secondary))
+            }
+            chip.setTextColor(getColor(if (selected) R.color.card_bg else R.color.text_secondary))
+        }
     }
 
     private fun updateSettingsUi() {
