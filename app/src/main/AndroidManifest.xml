@@ -25,6 +25,18 @@
         </activity>
 
         <activity
+            android:name=".DashboardActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|density"
+            android:exported="true"
+            android:label="@string/dashboard_title"
+            android:screenOrientation="sensorLandscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
             android:label="@string/widget_config_title">

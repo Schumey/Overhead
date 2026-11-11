@@ -188,6 +188,10 @@ class MainActivity : Activity() {
         status = text("", 14f, color = R.color.text_secondary)
         root.addView(status)
         root.addView(Button(this).apply {
+            setText(R.string.dashboard_open)
+            setOnClickListener { startActivity(Intent(this@MainActivity, DashboardActivity::class.java)) }
+        })
+        root.addView(Button(this).apply {
             setText(R.string.refresh)
             setOnClickListener { refresh() }
         })

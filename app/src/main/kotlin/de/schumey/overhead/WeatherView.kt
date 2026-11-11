@@ -153,7 +153,7 @@ object WeatherView {
         val msg = when {
             loading || state == null -> ctx.getString(R.string.loading_weather)
             state.error == Snapshot.ERR_LOCATION -> ctx.getString(R.string.err_location)
-            else -> ctx.getString(R.string.err_network)
+            else -> ctx.getString(R.string.err_network_weather)
         }
         val tp = Poster.textPaint(Poster.mono, 12f * d)
         val layout = android.text.StaticLayout.Builder.obtain(msg, 0, msg.length, tp, (w - pad * 4).toInt())

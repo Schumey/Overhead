@@ -11,6 +11,7 @@
     <string name="err_location">Kein Standort – tippe hier und erlaube den Standortzugriff</string>
     <string name="err_location_app">Kein Standort verfügbar. Erlaube den Standortzugriff oder speichere einen festen Ort.</string>
     <string name="err_network">Keine Verbindung zu den Flugdaten</string>
+    <string name="err_network_weather">Keine Verbindung zu den Wetterdaten</string>
     <string name="eta">Ankunft ca. %1$s (%2$s)</string>
     <string name="eta_token">Ank. ca. %s</string>
     <string name="poster_title">DER HIMMEL ÜBER %s</string>
@@ -133,6 +134,9 @@
     <string name="cal_link_remove">Entfernen</string>
     <string name="cal_link_invalid">Das ist kein gültiger Link.</string>
     <string name="cal_link_failed">Der Link lässt sich nicht als Kalender lesen.</string>
+
+    <string name="dashboard_title">Overhead Tafel</string>
+    <string name="dashboard_open">Vollbild-Ansicht (Tablet)</string>
 
     <string name="refresh">Aktualisieren</string>
     <string name="settings">Einstellungen</string>

@@ -177,6 +177,7 @@ object Forecasts {
             store(prefs, JSONObject().put("t", now).put("lat", lat).put("lon", lon).putOpt("place", place).put("raw", raw))
             load(prefs)
         } catch (e: Exception) {
+            android.util.Log.w("Overhead", "forecast refresh failed", e)
             val env = JSONObject().put("err", Snapshot.ERR_NETWORK)
             if (old != null && old.forecast != null && sameSpot) {
                 // keep showing the older forecast, with its own timestamp

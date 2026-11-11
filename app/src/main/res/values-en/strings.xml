@@ -11,6 +11,7 @@
     <string name="err_location">No location – tap here and allow location access</string>
     <string name="err_location_app">No location available. Allow location access or save a fixed place.</string>
     <string name="err_network">No connection to the flight data</string>
+    <string name="err_network_weather">No connection to the weather data</string>
     <string name="eta">Arrives approx. %1$s (%2$s)</string>
     <string name="eta_token">ETA %s</string>
     <string name="poster_title">THE SKY OVER %s</string>
@@ -133,6 +134,9 @@
     <string name="cal_link_remove">Remove</string>
     <string name="cal_link_invalid">That is not a valid link.</string>
     <string name="cal_link_failed">The link cannot be read as a calendar.</string>
+
+    <string name="dashboard_title">Overhead Board</string>
+    <string name="dashboard_open">Full-screen view (tablet)</string>
 
     <string name="refresh">Refresh</string>
     <string name="settings">Settings</string>
